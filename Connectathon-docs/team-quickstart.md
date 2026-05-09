@@ -23,9 +23,10 @@ Open PCM Admin first. The top table lists every configured public and internal U
 
 1. Open the PCM Admin/UI URL from your team assignment.
 2. Enter the team admin password when prompted.
-3. Confirm the Deployment URLs and ports table shows the services listed above.
-4. Open the Doctor's Portal link from the admin header.
-5. Keep the GitHub link in the admin header available for public docs and issue references.
+3. Confirm the team badge at the top of the page matches your assigned team.
+4. Confirm the Deployment URLs and ports table shows the services listed above.
+5. Open the Doctor's Portal link from the admin header.
+6. Keep the GitHub link in the admin header available for public docs and issue references.
 
 ## Run the built-in flow
 
@@ -78,6 +79,7 @@ After changing trust material, retry discovery and data fetch from Doctor's Port
 - Backup: download or restore the current team config and certificates.
 - Reset runtime: clear in-memory PCM data and re-bootstrap the demo catalog.
 - Run sanity check: execute the deployed end-to-end flow from the admin process.
+  The result appears on the same Admin page with an OK/error summary and expandable details.
 
 ## Recommended next steps
 

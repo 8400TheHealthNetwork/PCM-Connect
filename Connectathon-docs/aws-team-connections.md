@@ -1,0 +1,16 @@
+# AWS PCM Connectathon Team Connections
+
+Generated: 2026-05-09T18:54:11.780Z
+Region: il-central-1
+Cluster: pcm-connectathon
+Service prefix: hdp-pcm-connectathon
+
+> This file contains admin passwords. Keep it out of source control.
+
+| Team | ECS status | Running/desired | Admin password | SP UI | PCM UI | PCM API | PCM metadata | Reference DS FHIR | DS metadata |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| team-a | missing service |  | secret | [open](http://hdp-pcm-connectathon-team-a-web-1490954807.il-central-1.elb.amazonaws.com) | [open](http://hdp-pcm-connectathon-team-a-web-1490954807.il-central-1.elb.amazonaws.com:8081) | [open](https://hdp-pcm-connectathon-team-a-mtls-4f646c9f8d3dbb04.elb.il-central-1.amazonaws.com) |  | [open](https://hdp-pcm-connectathon-team-a-mtls-4f646c9f8d3dbb04.elb.il-central-1.amazonaws.com:8443/fhir) |  |
+| team-inters | ACTIVE | 1/1 | *-team-inters | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:3400) | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:4400) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4401) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4402) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8480/fhir) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8480) |
+| team-iris | ACTIVE | 1/1 | *-team-iris | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:3300) | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:4300) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4301) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4302) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8380/fhir) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8380) |
+| team-python | ACTIVE | 1/1 | *-team-python | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:3500) | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:4500) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4501) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4502) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8580/fhir) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8580) |
+| team-review | ACTIVE | 1/1 | *-team-review | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:3200) | [open](http://pcm-connectathon-web-2129175319.il-central-1.elb.amazonaws.com:4200) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4201) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4202) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8280/fhir) | [open](https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:8280) |
