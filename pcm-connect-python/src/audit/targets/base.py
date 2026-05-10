@@ -1,0 +1,9 @@
+from __future__ import annotations
+
+from typing import Protocol
+
+
+class AuditTarget(Protocol):
+    async def start(self) -> None: ...
+    async def send(self, payload: str) -> None: ...
+    async def aclose(self) -> None: ...

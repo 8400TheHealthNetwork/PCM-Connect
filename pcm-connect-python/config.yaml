@@ -1,0 +1,71 @@
+server:
+  host: "0.0.0.0"
+  port: 8000
+  shutdown_timeout_seconds: 30
+
+pcm:
+  base_url: "https://pcm-connectathon-mtls-4c336523aef82051.elb.il-central-1.amazonaws.com:4501"
+  token_endpoint: "/token"
+  introspect_endpoint: "/introspect"
+  mtls_client: true
+  client_assertion_algorithm: "RS256"
+  # Connectathon server cert is CN=pcm-core, not the ELB hostname.
+  # The chain is still verified against rootCA.crt; only SAN matching is skipped.
+  verify_hostname: false
+  # Per PCM API spec, /introspect accepts mutualTLS OR bearerAuth.
+  # "bearer" → acquire adapter token via /token, send as Authorization: Bearer.
+  # "mtls"   → rely on the mTLS connection alone, no Authorization header.
+  introspect_auth_method: "bearer"
+
+fhir_server:
+  base_url: "https://fhir-internal:8080"
+  protocol: "https"
+  timeout_seconds: 30
+
+id_replacement:
+  base_url: "http://id-service:9000"
+  endpoint: "/api/v1/resolve"
+  timeout_seconds: 1.0
+  retries: 3
+  retry_backoff_seconds: 0.5
+
+jwt:
+  algorithm: "ES256"
+  issuer: "ds-adapter"
+  expiry_seconds: 300
+
+audit:
+  enabled: true
+  format: "json"
+  include_response: false
+  targets:
+    syslog:
+      enabled: false
+      host: "localhost"
+      port: 514
+      protocol: "udp"
+    file:
+      enabled: true
+      path: "/var/log/adapter/audit.log"
+      rotation: "daily"
+      max_files: 30
+    kafka:
+      enabled: false
+      brokers: "kafka:9092"
+      topic: "ds-adapter-audit"
+
+logging:
+  level: "info"
+  format: "json"
+
+otel:
+  enabled: true
+  exporter: "otlp"
+  endpoint: "http://otel-collector:4317"
+  service_name: "ds-adapter"
+  sample_rate: 1.0
+
+verification:
+  enabled: true
+  forbidden_labels:
+    - "http://fhir.health.gov.il/cs/il-core-main-security-label|V"
