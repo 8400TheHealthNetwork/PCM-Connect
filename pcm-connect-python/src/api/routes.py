@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import os
 import time
 
@@ -9,6 +10,7 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from src.api.dependencies import get_bearer_token, get_correlation_id
 from src.auth.cnf import warn_if_cnf_mismatch
+from src.auth.jwks import build_jwks, load_signing_key_pem
 from src.auth.jwt_service import mint_internal_jwt
 from src.errors import DSAdapterError
 from src.observability import metrics
@@ -26,6 +28,19 @@ async def health() -> dict[str, str]:
 @router.get("/metrics")
 async def prometheus_metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
+
+
+@router.get("/.well-known/jwks.json")
+async def jwks(request: Request) -> Response:
+    raw = os.environ.get("DS_ADAPTER_JWT_SIGNING_KEY", "")
+    if not raw:
+        raise DSAdapterError("missing JWT signing key", code="CFG_001")
+    pem = load_signing_key_pem(raw)
+    payload = build_jwks(pem, request.app.state.config.jwt.algorithm)
+    return Response(
+        content=json.dumps(payload),
+        media_type="application/jwk-set+json",
+    )
 
 
 @router.get("/ready")
