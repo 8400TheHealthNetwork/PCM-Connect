@@ -1,0 +1,11 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+*.pyd
+*.log
+.venv/
+tests/
+mock_fhir_server.py
+.git/
+.gitignore

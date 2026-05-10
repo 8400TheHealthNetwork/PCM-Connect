@@ -1,0 +1,23 @@
+{
+  "api": {
+    "host": "127.0.0.1",
+    "port": 8013
+  },
+  "auth": {
+    "username": "resolver_user",
+    "password": "change-me"
+  },
+  "fhir": {
+    "base_url": "http://localhost:52773/fhir/r4",
+    "timeout_seconds": 15.0,
+    "verify_ssl": true,
+    "default_headers": {
+      "Accept": "application/fhir+json",
+      "Authorization": "Basic ${ENV:FHIR_TESTSERVER_BASIC_TOKEN}"
+    }
+  },
+  "resolver": {
+    "patient_id_strategy": "resource_id",
+    "patient_id_identifier_system": null
+  }
+}

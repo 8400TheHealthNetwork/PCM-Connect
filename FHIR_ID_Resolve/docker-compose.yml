@@ -1,0 +1,16 @@
+services:
+  fhir-id-resolve:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fhir_id_resolve
+    ports:
+      - "8000:8000"
+    environment:
+      FHIR_RESOLVE_CONFIG: /app/config.docker.json
+      FHIR_TESTSERVER_BASIC_TOKEN: ${FHIR_TESTSERVER_BASIC_TOKEN}
+    volumes:
+      - ./config.docker.json:/app/config.docker.json:ro
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: unless-stopped
