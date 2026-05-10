@@ -115,11 +115,25 @@ pytest -q
 ## Run integration test against FHIR_TestServer
 
 ```powershell
-# Base64 token for _SYSTEM:SYS
-$env:FHIR_TESTSERVER_BASIC_TOKEN = "X1NZU1RFTTpTWVM="
+# Base64 token for superuser:SYS
+$env:FHIR_TESTSERVER_BASIC_TOKEN = "c3VwZXJ1c2VyOlNZUw=="
 $env:RUN_FHIR_TESTSERVER_INTEGRATION = "1"
 pytest -q -m integration tests/test_integration_fhir_testserver.py
 ```
+
+Configured IRIS FHIR endpoint:
+
+- `https://iris.intersystemsisrael.com/csp/healthshare/fhir1/fhir/r4`
+
+Known patient resource IDs used by integration checks:
+
+- `Patient/17`
+- `Patient/18`
+- `Patient/19`
+- `Patient/20`
+- `Patient/21`
+- `Patient/il-hdp-pT-DUP-456789015`
+- `Patient/il-hdp-pT-DUP-345678904-inactive`
 
 ## Manual tests
 

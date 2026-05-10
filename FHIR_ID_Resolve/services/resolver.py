@@ -12,29 +12,39 @@ class UpstreamUnavailableError(Exception):
     pass
 
 
+class DuplicateActivePatientError(Exception):
+    """Raised when more than one active Patient resource matches the identifier."""
+
+    def __init__(self, ids: list[str]) -> None:
+        self.ids = ids
+        super().__init__(f"Multiple active patients found: {ids}")
+
+
 @dataclass
 class ResolveResult:
     patient_id: str
     resource_reference: str
 
 
-def _extract_patient_resource(payload: dict[str, Any]) -> dict[str, Any] | None:
+def _extract_patient_resources(payload: dict[str, Any]) -> list[dict[str, Any]]:
     entries = payload.get("entry")
-    if not isinstance(entries, list) or not entries:
-        return None
+    if not isinstance(entries, list):
+        return []
 
-    first = entries[0]
-    if not isinstance(first, dict):
-        return None
+    resources: list[dict[str, Any]] = []
+    for entry in entries:
+        if not isinstance(entry, dict):
+            continue
+        resource = entry.get("resource")
+        if isinstance(resource, dict) and resource.get("resourceType") == "Patient":
+            resources.append(resource)
+    return resources
 
-    resource = first.get("resource")
-    if not isinstance(resource, dict):
-        return None
 
-    if resource.get("resourceType") != "Patient":
-        return None
-
-    return resource
+def _is_active(resource: dict[str, Any]) -> bool:
+    """A Patient with no 'active' field is treated as active per the FHIR spec."""
+    active = resource.get("active")
+    return active is None or active is True
 
 
 def _extract_identifier_value(resource: dict[str, Any], preferred_system: str) -> str | None:
@@ -71,7 +81,6 @@ async def resolve_patient(system: str, value: str, settings: Settings) -> Resolv
     search_url = f"{settings.fhir.base_url.rstrip('/')}/Patient"
     params = {
         "identifier": f"{system}|{value}",
-        "_count": "1",
     }
 
     try:
@@ -95,10 +104,17 @@ async def resolve_patient(system: str, value: str, settings: Settings) -> Resolv
     except ValueError as exc:
         raise UpstreamUnavailableError("FHIR server returned invalid JSON") from exc
 
-    resource = _extract_patient_resource(payload)
-    if resource is None:
+    all_resources = _extract_patient_resources(payload)
+    active_resources = [r for r in all_resources if _is_active(r)]
+
+    if not active_resources:
         return None
 
+    if len(active_resources) > 1:
+        ids = [str(r.get("id", "<unknown>")) for r in active_resources]
+        raise DuplicateActivePatientError(ids)
+
+    resource = active_resources[0]
     patient_id = _get_patient_id(resource, settings)
     if not patient_id:
         raise UpstreamUnavailableError("Patient resource missing usable identifier")

@@ -8,7 +8,7 @@
     "password": "change-me"
   },
   "fhir": {
-    "base_url": "http://host.docker.internal:52773/fhir/r4",
+    "base_url": "https://iris.intersystemsisrael.com/csp/healthshare/fhir1/fhir/r4",
     "timeout_seconds": 15.0,
     "verify_ssl": true,
     "default_headers": {

@@ -6,7 +6,7 @@ from fastapi.responses import JSONResponse
 
 from core.auth import require_api_user
 from core.config import get_settings
-from services.resolver import UpstreamUnavailableError, resolve_patient
+from services.resolver import DuplicateActivePatientError, UpstreamUnavailableError, resolve_patient
 
 
 class NationalIdInput(BaseModel):
@@ -28,6 +28,12 @@ class NotFoundResponse(BaseModel):
     message: str
 
 
+class ConflictResponse(BaseModel):
+    error: str
+    message: str
+    patient_ids: list[str]
+
+
 class ServiceUnavailableResponse(BaseModel):
     error: str
     message: str
@@ -41,6 +47,7 @@ router = APIRouter(prefix="/api/v1", tags=["resolve"], dependencies=[Depends(req
     response_model=ResolveSuccessResponse,
     responses={
         404: {"model": NotFoundResponse},
+        409: {"model": ConflictResponse},
         503: {"model": ServiceUnavailableResponse},
     },
     summary="Resolve national ID to local patient ID",
@@ -53,6 +60,15 @@ async def resolve_national_id(body: ResolveRequest) -> ResolveSuccessResponse:
             system=body.national_id.system,
             value=body.national_id.value,
             settings=settings,
+        )
+    except DuplicateActivePatientError as exc:
+        return JSONResponse(
+            status_code=409,
+            content={
+                "error": "duplicate_active_patient",
+                "message": "More than one active patient was found for the provided national identifier",
+                "patient_ids": exc.ids,
+            },
         )
     except UpstreamUnavailableError as exc:
         return JSONResponse(

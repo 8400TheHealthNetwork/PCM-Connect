@@ -8,7 +8,7 @@ services:
       - "8000:8000"
     environment:
       FHIR_RESOLVE_CONFIG: /app/config.docker.json
-      FHIR_TESTSERVER_BASIC_TOKEN: ${FHIR_TESTSERVER_BASIC_TOKEN}
+      FHIR_TESTSERVER_BASIC_TOKEN: c3VwZXJ1c2VyOlNZUw==
     volumes:
       - ./config.docker.json:/app/config.docker.json:ro
     extra_hosts:
