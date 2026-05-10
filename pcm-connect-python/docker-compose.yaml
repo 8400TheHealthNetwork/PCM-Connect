@@ -1,0 +1,30 @@
+version: "3.8"
+services:
+  ds-adapter:
+    build: .
+    ports:
+      - "8000:8000"
+    environment:
+      - DS_ADAPTER_PCM_BASE_URL=http://mock-pcm:1080
+      - DS_ADAPTER_FHIR_SERVER_BASE_URL=http://mock-fhir:1080
+      - DS_ADAPTER_PCM_MTLS_CLIENT=false
+      - DS_ADAPTER_OTEL_ENABLED=false
+      - DS_ADAPTER_AUDIT_ENABLED=false
+      - DS_ADAPTER_JWT_SIGNING_KEY=/certs/jwt-signing.key
+      - DS_ADAPTER_PCM_CLIENT_KEY=/certs/jwt-signing.key
+    volumes:
+      - ./certs:/certs:ro
+      - ./config.yaml:/app/config.yaml:ro
+    depends_on:
+      - mock-pcm
+      - mock-fhir
+
+  mock-pcm:
+    image: mockserver/mockserver:latest
+    ports:
+      - "3000:1080"
+
+  mock-fhir:
+    image: mockserver/mockserver:latest
+    ports:
+      - "8080:1080"
