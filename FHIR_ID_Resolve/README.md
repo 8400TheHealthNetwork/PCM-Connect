@@ -1,6 +1,6 @@
 # FHIR ID Resolve API
 
-Standalone FastAPI service for resolving a national identifier to a local patient ID.
+Standalone FastAPI service for resolving an identifier to a local patient ID.
 
 ## Endpoint
 
@@ -11,7 +11,7 @@ Request body:
 
 ```json
 {
-  "national_id": {
+  "identifier": {
     "system": "http://fhir.health.gov.il/identifier/il-national-id",
     "value": "000000018"
   }
@@ -32,7 +32,7 @@ Not found response (`404`):
 ```json
 {
   "error": "patient_not_found",
-  "message": "No patient was found for the provided national identifier"
+  "message": "No patient was found for the provided identifier"
 }
 ```
 
@@ -96,7 +96,7 @@ Manual call:
 ```powershell
 $token = [Convert]::ToBase64String([Text.Encoding]::ASCII.GetBytes("resolver_user:change-me"))
 $headers = @{ Authorization = "Basic $token" }
-$body = @{ national_id = @{ system = "http://fhir.health.gov.il/identifier/il-national-id"; value = "000000019" } } | ConvertTo-Json -Compress
+$body = @{ identifier = @{ system = "http://fhir.health.gov.il/identifier/il-national-id"; value = "000000019" } } | ConvertTo-Json -Compress
 Invoke-RestMethod -Uri "http://127.0.0.1:8000/api/v1/resolve" -Method Post -Headers $headers -ContentType "application/json" -Body $body
 ```
 
@@ -141,5 +141,5 @@ Known patient resource IDs used by integration checks:
 # Replace credentials and payload values for your environment.
 curl -u resolver_user:change-me -X POST http://localhost:8000/api/v1/resolve ^
   -H "Content-Type: application/json" ^
-  -d "{\"national_id\":{\"system\":\"http://fhir.health.gov.il/identifier/il-national-id\",\"value\":\"000000018\"}}"
+  -d "{\"identifier\":{\"system\":\"http://fhir.health.gov.il/identifier/il-national-id\",\"value\":\"000000018\"}}"
 ```

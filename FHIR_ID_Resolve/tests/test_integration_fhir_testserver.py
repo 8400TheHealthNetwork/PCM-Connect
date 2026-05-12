@@ -19,7 +19,7 @@ from core.config import get_settings
 #   il-hdp-pat-dup-456789015         shares 456789015 with Patient/20   — both ACTIVE → 409
 #   il-hdp-pat-dup-345678904-inactive shares 345678904 with Patient/19   — inactive    → 200
 
-NATIONAL_ID_SYSTEM = "http://fhir.health.gov.il/identifier/il-national-id"
+IDENTIFIER_SYSTEM = "http://fhir.health.gov.il/identifier/il-national-id"
 API_AUTH = ("resolver_user", "change-me")
 
 
@@ -30,7 +30,7 @@ def _setup_testserver_config() -> None:
 
 @pytest.mark.integration
 def test_resolve_patient_17() -> None:
-    """Patient/17 has national-id 123456782 — should resolve cleanly."""
+    """Patient/17 has identifier value 123456782 — should resolve cleanly."""
     if os.getenv("RUN_FHIR_TESTSERVER_INTEGRATION") != "1":
         pytest.skip("Set RUN_FHIR_TESTSERVER_INTEGRATION=1 to run")
     _setup_testserver_config()
@@ -39,7 +39,7 @@ def test_resolve_patient_17() -> None:
         resp = client.post(
             "/api/v1/resolve",
             auth=API_AUTH,
-            json={"national_id": {"system": NATIONAL_ID_SYSTEM, "value": "123456782"}},
+            json={"identifier": {"system": IDENTIFIER_SYSTEM, "value": "123456782"}},
         )
 
     assert resp.status_code == 200
@@ -51,7 +51,7 @@ def test_resolve_patient_17() -> None:
 
 @pytest.mark.integration
 def test_resolve_patient_20_canonical() -> None:
-    """National-id 456789015 exists on both Patient/20 and its duplicate.
+    """Identifier value 456789015 exists on both Patient/20 and its duplicate.
     The resolver returns the first bundle entry — Patient/20."""
     if os.getenv("RUN_FHIR_TESTSERVER_INTEGRATION") != "1":
         pytest.skip("Set RUN_FHIR_TESTSERVER_INTEGRATION=1 to run")
@@ -61,7 +61,7 @@ def test_resolve_patient_20_canonical() -> None:
         resp = client.post(
             "/api/v1/resolve",
             auth=API_AUTH,
-            json={"national_id": {"system": NATIONAL_ID_SYSTEM, "value": "456789015"}},
+            json={"identifier": {"system": IDENTIFIER_SYSTEM, "value": "456789015"}},
         )
 
     assert resp.status_code == 200
@@ -74,7 +74,7 @@ def test_resolve_patient_20_canonical() -> None:
 
 @pytest.mark.integration
 def test_resolve_not_found() -> None:
-    """A national-id that does not exist in IRIS should yield 404."""
+    """An identifier value that does not exist in IRIS should yield 404."""
     if os.getenv("RUN_FHIR_TESTSERVER_INTEGRATION") != "1":
         pytest.skip("Set RUN_FHIR_TESTSERVER_INTEGRATION=1 to run")
     _setup_testserver_config()
@@ -83,7 +83,7 @@ def test_resolve_not_found() -> None:
         resp = client.post(
             "/api/v1/resolve",
             auth=API_AUTH,
-            json={"national_id": {"system": NATIONAL_ID_SYSTEM, "value": "000000000"}},
+            json={"identifier": {"system": IDENTIFIER_SYSTEM, "value": "000000000"}},
         )
 
     assert resp.status_code == 404
@@ -93,7 +93,7 @@ def test_resolve_not_found() -> None:
 
 @pytest.mark.integration
 def test_resolve_patient_19_inactive_dup_filtered() -> None:
-    """national-id 345678904 exists on Patient/19 (active) and il-hdp-pat-dup-345678904-inactive (active=false).
+    """Identifier value 345678904 exists on Patient/19 (active) and il-hdp-pat-dup-345678904-inactive (active=false).
     Only the active patient should be returned — 200, not 409."""
     if os.getenv("RUN_FHIR_TESTSERVER_INTEGRATION") != "1":
         pytest.skip("Set RUN_FHIR_TESTSERVER_INTEGRATION=1 to run")
@@ -103,7 +103,7 @@ def test_resolve_patient_19_inactive_dup_filtered() -> None:
         resp = client.post(
             "/api/v1/resolve",
             auth=API_AUTH,
-            json={"national_id": {"system": NATIONAL_ID_SYSTEM, "value": "345678904"}},
+            json={"identifier": {"system": IDENTIFIER_SYSTEM, "value": "345678904"}},
         )
 
     assert resp.status_code == 200
