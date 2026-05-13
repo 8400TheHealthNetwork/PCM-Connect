@@ -29,6 +29,12 @@ class IDReplacementClient:
         if auth:
             headers["Authorization"] = auth
 
+        # If the value already contains the system prefix (system|value format from PCM),
+        # strip it so we only send the bare identifier to FHIR_ID_Resolve.
+        prefix = NATIONAL_ID_SYSTEM + "|"
+        if national_id.startswith(prefix):
+            national_id = national_id[len(prefix):]
+
         body = {
             "national_id": {
                 "system": NATIONAL_ID_SYSTEM,
