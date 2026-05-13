@@ -113,9 +113,10 @@ async def fhir_proxy(
     )
     metrics.ID_REPLACEMENT_DURATION.observe(time.perf_counter() - t0)
 
-    signing_key = os.environ.get("DS_ADAPTER_JWT_SIGNING_KEY", "")
-    if not signing_key:
+    signing_key_raw = os.environ.get("DS_ADAPTER_JWT_SIGNING_KEY", "")
+    if not signing_key_raw:
         raise DSAdapterError("missing JWT signing key", code="CFG_001")
+    signing_key = load_signing_key_pem(signing_key_raw)
 
     internal_jwt = mint_internal_jwt(
         issuer=config.jwt.issuer,
