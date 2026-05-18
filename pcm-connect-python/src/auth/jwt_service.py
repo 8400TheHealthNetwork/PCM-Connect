@@ -9,7 +9,7 @@ import jwt
 def mint_internal_jwt(
     *,
     issuer: str,
-    audience: str,
+    audience: str | list[str],
     patient_id: str,
     consent_id: str | None,
     scope: str | None,
@@ -20,6 +20,7 @@ def mint_internal_jwt(
     signing_key: str,
     expiry_seconds: int = 300,
     algorithm: str = "ES256",
+    kid: str | None = None,
 ) -> str:
     now = int(time.time())
     payload = {
@@ -36,7 +37,8 @@ def mint_internal_jwt(
         "sp_organization_id": sp_organization_id,
         "correlation_id": correlation_id,
     }
-    return jwt.encode(payload, signing_key, algorithm=algorithm)
+    headers = {"kid": kid} if kid else None
+    return jwt.encode(payload, signing_key, algorithm=algorithm, headers=headers)
 
 
 def mint_client_assertion(

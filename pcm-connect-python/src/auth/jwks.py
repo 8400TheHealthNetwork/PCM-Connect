@@ -67,6 +67,15 @@ def build_jwks(signing_key_pem: str, algorithm: str) -> dict[str, Any]:
     return {"keys": [jwk]}
 
 
+def get_signing_kid(signing_key_pem: str, algorithm: str) -> str:
+    """Return the `kid` (JWK thumbprint) the adapter publishes for this key.
+
+    Used to stamp the JWT header so verifiers can pick the right key from
+    the JWKS without trial-and-error.
+    """
+    return build_jwks(signing_key_pem, algorithm)["keys"][0]["kid"]
+
+
 def _b64url_uint(value: int, byte_length: int | None = None) -> str:
     if byte_length is None:
         byte_length = max(1, (value.bit_length() + 7) // 8)

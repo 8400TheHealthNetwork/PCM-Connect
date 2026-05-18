@@ -31,8 +31,40 @@ id_replacement:
 
 jwt:
   algorithm: "ES256"
+  # Public URL of this adapter. MUST be the same value the FHIR server (IRIS)
+  # is configured to trust as `iss`, AND the URL clients can hit to fetch
+  # /.well-known/openid-configuration and /.well-known/jwks.json.
+  # Override per environment with DS_ADAPTER_JWT_ISSUER.
   issuer: "ds-adapter"
+  # JWT `aud` claim. Accepts a string OR a list of strings. Leave null to
+  # fall back to fhir_server.base_url. Set to a list when the FHIR server
+  # (e.g. IRIS) accepts more than one valid audience — for example with and
+  # without an explicit port.
+  # Override with DS_ADAPTER_JWT_AUDIENCE (use comma-separated for a list).
+  # Example list:
+  #   audience:
+  #     - "https://iris.example.com:443/csp/healthshare/fhir1/fhir/r4"
+  #     - "https://iris.example.com/csp/healthshare/fhir1/fhir/r4"
+  audience: null
   expiry_seconds: 300
+
+metadata:
+  enabled: true
+  # Override the JWKS URL advertised in discovery. Leave null to default to
+  # `<issuer>/.well-known/jwks.json`.
+  jwks_uri: null
+  # Optional pass-through endpoints for clients that want them. Usually point
+  # at PCM. Leave null to omit from the discovery payload.
+  authorization_endpoint: null
+  token_endpoint: null
+  introspection_endpoint: null
+  # `scopes_supported` defaults to a comprehensive SMART-on-FHIR list covering
+  # the common resource types (with patient/*, user/*, system/* wildcards too)
+  # since PCM baskets can grant access to many different resources. Override
+  # in YAML if you need a tighter advertisement.
+  capabilities:
+    - "launch-standalone"
+    - "client-public"
 
 audit:
   enabled: true

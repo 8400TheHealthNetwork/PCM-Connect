@@ -10,8 +10,13 @@ from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
 
 from src.api.dependencies import get_bearer_token, get_correlation_id
 from src.auth.cnf import warn_if_cnf_mismatch
-from src.auth.jwks import build_jwks, load_signing_key_pem
+from src.auth.jwks import build_jwks, get_signing_kid, load_signing_key_pem
 from src.auth.jwt_service import mint_internal_jwt
+from src.auth.metadata import (
+    build_oauth_authorization_server,
+    build_openid_configuration,
+    build_smart_configuration,
+)
 from src.errors import DSAdapterError
 from src.observability import metrics
 
@@ -40,6 +45,43 @@ async def jwks(request: Request) -> Response:
     return Response(
         content=json.dumps(payload),
         media_type="application/jwk-set+json",
+    )
+
+
+def _metadata_disabled() -> Response:
+    return Response(status_code=404)
+
+
+@router.get("/.well-known/oauth-authorization-server")
+async def oauth_authorization_server(request: Request) -> Response:
+    config = request.app.state.config
+    if not config.metadata.enabled:
+        return _metadata_disabled()
+    return Response(
+        content=json.dumps(build_oauth_authorization_server(config)),
+        media_type="application/json",
+    )
+
+
+@router.get("/.well-known/openid-configuration")
+async def openid_configuration(request: Request) -> Response:
+    config = request.app.state.config
+    if not config.metadata.enabled:
+        return _metadata_disabled()
+    return Response(
+        content=json.dumps(build_openid_configuration(config)),
+        media_type="application/json",
+    )
+
+
+@router.get("/.well-known/smart-configuration")
+async def smart_configuration(request: Request) -> Response:
+    config = request.app.state.config
+    if not config.metadata.enabled:
+        return _metadata_disabled()
+    return Response(
+        content=json.dumps(build_smart_configuration(config)),
+        media_type="application/json",
     )
 
 
@@ -117,10 +159,17 @@ async def fhir_proxy(
     if not signing_key_raw:
         raise DSAdapterError("missing JWT signing key", code="CFG_001")
     signing_key = load_signing_key_pem(signing_key_raw)
+    kid = get_signing_kid(signing_key, config.jwt.algorithm)
+
+    # `aud` falls back to the FHIR server base URL if the operator hasn't
+    # explicitly configured `jwt.audience`. The FHIR server (e.g. IRIS) MUST
+    # accept this exact value as a valid `aud`. If `audience` is a list,
+    # the JWT will encode it as a JSON array per RFC 7519.
+    audience: str | list[str] = config.jwt.audience or config.fhir_server.base_url
 
     internal_jwt = mint_internal_jwt(
         issuer=config.jwt.issuer,
-        audience=config.fhir_server.base_url,
+        audience=audience,
         patient_id=local_patient_id,
         consent_id=introspection.consent_id,
         scope=introspection.scope,
@@ -131,6 +180,7 @@ async def fhir_proxy(
         signing_key=signing_key,
         expiry_seconds=config.jwt.expiry_seconds,
         algorithm=config.jwt.algorithm,
+        kid=kid,
     )
 
     _STRIP_INBOUND = _HOP_BY_HOP | {"authorization", "x-correlation-id"}
@@ -141,6 +191,16 @@ async def fhir_proxy(
         forward_headers[k] = v
     forward_headers["Authorization"] = f"Bearer {internal_jwt}"
     forward_headers["X-Correlation-ID"] = correlation_id
+
+    log.debug(
+        "fhir_forward_jwt",
+        kid=kid,
+        iss=config.jwt.issuer,
+        aud=audience,
+        alg=config.jwt.algorithm,
+        ttl_seconds=config.jwt.expiry_seconds,
+        token_preview=internal_jwt[:12] + "..." + internal_jwt[-6:],
+    )
 
     body = await request.body()
     t0 = time.perf_counter()
