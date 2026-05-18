@@ -37,6 +37,7 @@ async def prometheus_metrics() -> Response:
 
 @router.get("/.well-known/jwks.json")
 async def jwks(request: Request) -> Response:
+    _log_discovery_hit(request, "jwks")
     raw = os.environ.get("DS_ADAPTER_JWT_SIGNING_KEY", "")
     if not raw:
         raise DSAdapterError("missing JWT signing key", code="CFG_001")
@@ -52,8 +53,24 @@ def _metadata_disabled() -> Response:
     return Response(status_code=404)
 
 
+def _log_discovery_hit(request: Request, kind: str) -> None:
+    """Visible at INFO so we can confirm IRIS / Apache mod_auth_openidc /
+    any verifier is actually fetching us live (and not serving from cache).
+    """
+    client = request.client.host if request.client else "unknown"
+    log.info(
+        "discovery_hit",
+        kind=kind,
+        path=request.url.path,
+        source_ip=client,
+        user_agent=request.headers.get("user-agent", ""),
+        x_forwarded_for=request.headers.get("x-forwarded-for", ""),
+    )
+
+
 @router.get("/.well-known/oauth-authorization-server")
 async def oauth_authorization_server(request: Request) -> Response:
+    _log_discovery_hit(request, "oauth-authorization-server")
     config = request.app.state.config
     if not config.metadata.enabled:
         return _metadata_disabled()
@@ -65,6 +82,7 @@ async def oauth_authorization_server(request: Request) -> Response:
 
 @router.get("/.well-known/openid-configuration")
 async def openid_configuration(request: Request) -> Response:
+    _log_discovery_hit(request, "openid-configuration")
     config = request.app.state.config
     if not config.metadata.enabled:
         return _metadata_disabled()
@@ -76,6 +94,7 @@ async def openid_configuration(request: Request) -> Response:
 
 @router.get("/.well-known/smart-configuration")
 async def smart_configuration(request: Request) -> Response:
+    _log_discovery_hit(request, "smart-configuration")
     config = request.app.state.config
     if not config.metadata.enabled:
         return _metadata_disabled()
