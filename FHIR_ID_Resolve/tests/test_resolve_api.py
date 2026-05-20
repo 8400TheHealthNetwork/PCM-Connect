@@ -56,7 +56,7 @@ def test_resolve_returns_200_when_patient_found(monkeypatch, tmp_path: Path) -> 
             "/api/v1/resolve",
             auth=_auth(),
             json={
-                "national_id": {
+                "identifier": {
                     "system": "http://fhir.health.gov.il/identifier/il-national-id",
                     "value": "000000018",
                 }
@@ -88,7 +88,7 @@ def test_resolve_returns_404_when_patient_missing(monkeypatch, tmp_path: Path) -
             "/api/v1/resolve",
             auth=_auth(),
             json={
-                "national_id": {
+                "identifier": {
                     "system": "http://fhir.health.gov.il/identifier/il-national-id",
                     "value": "000000019",
                 }
@@ -98,7 +98,7 @@ def test_resolve_returns_404_when_patient_missing(monkeypatch, tmp_path: Path) -
     assert response.status_code == 404
     assert response.json() == {
         "error": "patient_not_found",
-        "message": "No patient was found for the provided national identifier",
+        "message": "No patient was found for the provided identifier",
     }
 
 
@@ -113,7 +113,7 @@ def test_resolve_returns_401_on_bad_auth(monkeypatch, tmp_path: Path) -> None:
             "/api/v1/resolve",
             auth=("wrong_user", "wrong_pass"),
             json={
-                "national_id": {
+                "identifier": {
                     "system": "http://fhir.health.gov.il/identifier/il-national-id",
                     "value": "000000018",
                 }
@@ -141,7 +141,7 @@ def test_resolve_returns_503_when_upstream_unavailable(monkeypatch, tmp_path: Pa
             "/api/v1/resolve",
             auth=_auth(),
             json={
-                "national_id": {
+                "identifier": {
                     "system": "http://fhir.health.gov.il/identifier/il-national-id",
                     "value": "000000018",
                 }

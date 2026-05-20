@@ -9,13 +9,13 @@ from core.config import get_settings
 from services.resolver import DuplicateActivePatientError, UpstreamUnavailableError, resolve_patient
 
 
-class NationalIdInput(BaseModel):
+class IdentifierInput(BaseModel):
     system: str
     value: str
 
 
 class ResolveRequest(BaseModel):
-    national_id: NationalIdInput
+    identifier: IdentifierInput
 
 
 class ResolveSuccessResponse(BaseModel):
@@ -50,15 +50,15 @@ router = APIRouter(prefix="/api/v1", tags=["resolve"], dependencies=[Depends(req
         409: {"model": ConflictResponse},
         503: {"model": ServiceUnavailableResponse},
     },
-    summary="Resolve national ID to local patient ID",
+    summary="Resolve identifier to local patient ID",
 )
-async def resolve_national_id(body: ResolveRequest) -> ResolveSuccessResponse:
+async def resolve_identifier(body: ResolveRequest) -> ResolveSuccessResponse:
     settings = get_settings()
 
     try:
         result = await resolve_patient(
-            system=body.national_id.system,
-            value=body.national_id.value,
+            system=body.identifier.system,
+            value=body.identifier.value,
             settings=settings,
         )
     except DuplicateActivePatientError as exc:
@@ -66,7 +66,7 @@ async def resolve_national_id(body: ResolveRequest) -> ResolveSuccessResponse:
             status_code=409,
             content={
                 "error": "duplicate_active_patient",
-                "message": "More than one active patient was found for the provided national identifier",
+                "message": "More than one active patient was found for the provided identifier",
                 "patient_ids": exc.ids,
             },
         )
@@ -84,7 +84,7 @@ async def resolve_national_id(body: ResolveRequest) -> ResolveSuccessResponse:
             status_code=404,
             content={
                 "error": "patient_not_found",
-                "message": "No patient was found for the provided national identifier",
+                "message": "No patient was found for the provided identifier",
             },
         )
 
