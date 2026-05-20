@@ -39,6 +39,93 @@ class Settings(BaseModel):
     resolver: ResolverConfig
 
 
+# ---------------------------------------------------------------------------
+# Environment variable prefix for direct config overrides.
+# When set, these take precedence over values from the config file.
+#
+# Supported env vars:
+#   FHIR_RESOLVE_API_HOST
+#   FHIR_RESOLVE_API_PORT
+#   FHIR_RESOLVE_AUTH_USERNAME
+#   FHIR_RESOLVE_AUTH_PASSWORD
+#   FHIR_RESOLVE_FHIR_BASE_URL
+#   FHIR_RESOLVE_FHIR_TIMEOUT_SECONDS
+#   FHIR_RESOLVE_FHIR_VERIFY_SSL
+#   FHIR_RESOLVE_FHIR_DEFAULT_HEADERS  (JSON object string)
+#   FHIR_RESOLVE_PATIENT_ID_STRATEGY
+#   FHIR_RESOLVE_PATIENT_ID_IDENTIFIER_SYSTEM
+# ---------------------------------------------------------------------------
+
+_ENV_PREFIX = "FHIR_RESOLVE_"
+
+
+def _build_config_from_env() -> dict[str, Any]:
+    """Build a configuration dict purely from environment variables.
+
+    Returns a (possibly partial) nested dict matching the Settings schema.
+    Only keys whose corresponding env var is set will be included.
+    """
+    config: dict[str, Any] = {}
+
+    # --- api ---
+    api: dict[str, Any] = {}
+    if v := os.environ.get(f"{_ENV_PREFIX}API_HOST"):
+        api["host"] = v
+    if v := os.environ.get(f"{_ENV_PREFIX}API_PORT"):
+        api["port"] = int(v)
+    if api:
+        config["api"] = api
+
+    # --- auth ---
+    auth: dict[str, Any] = {}
+    if v := os.environ.get(f"{_ENV_PREFIX}AUTH_USERNAME"):
+        auth["username"] = v
+    if v := os.environ.get(f"{_ENV_PREFIX}AUTH_PASSWORD"):
+        auth["password"] = v
+    if auth:
+        config["auth"] = auth
+
+    # --- fhir ---
+    fhir: dict[str, Any] = {}
+    if v := os.environ.get(f"{_ENV_PREFIX}FHIR_BASE_URL"):
+        fhir["base_url"] = v
+    if v := os.environ.get(f"{_ENV_PREFIX}FHIR_TIMEOUT_SECONDS"):
+        fhir["timeout_seconds"] = float(v)
+    if v := os.environ.get(f"{_ENV_PREFIX}FHIR_VERIFY_SSL"):
+        fhir["verify_ssl"] = v.lower() in ("true", "1", "yes")
+    if v := os.environ.get(f"{_ENV_PREFIX}FHIR_DEFAULT_HEADERS"):
+        try:
+            fhir["default_headers"] = json.loads(v)
+        except json.JSONDecodeError:
+            raise RuntimeError(
+                f"{_ENV_PREFIX}FHIR_DEFAULT_HEADERS must be a valid JSON object"
+            )
+    if fhir:
+        config["fhir"] = fhir
+
+    # --- resolver ---
+    resolver: dict[str, Any] = {}
+    if v := os.environ.get(f"{_ENV_PREFIX}PATIENT_ID_STRATEGY"):
+        resolver["patient_id_strategy"] = v
+    if v := os.environ.get(f"{_ENV_PREFIX}PATIENT_ID_IDENTIFIER_SYSTEM"):
+        resolver["patient_id_identifier_system"] = v
+    if resolver:
+        config["resolver"] = resolver
+
+    return config
+
+
+def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
+    """Recursively merge override into base. Override values win."""
+    merged = base.copy()
+    for key, value in override.items():
+        if key in merged and isinstance(merged[key], dict) and isinstance(value, dict):
+            merged[key] = _deep_merge(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
 ENV_PLACEHOLDER_RE = re.compile(r"\$\{ENV:([A-Za-z_][A-Za-z0-9_]*)\}")
 
 
@@ -66,12 +153,11 @@ def _resolve_env_placeholders(value: Any) -> Any:
     return value
 
 
-def _read_config_file() -> dict[str, Any]:
+def _read_config_file() -> dict[str, Any] | None:
+    """Read the config file if it exists. Returns None if no file is found."""
     config_path = Path(os.getenv("FHIR_RESOLVE_CONFIG", "config.json"))
     if not config_path.is_file():
-        raise RuntimeError(
-            f"Configuration file not found: {config_path}. Set FHIR_RESOLVE_CONFIG or create config.json"
-        )
+        return None
 
     try:
         raw = config_path.read_text(encoding="utf-8")
@@ -82,9 +168,31 @@ def _read_config_file() -> dict[str, Any]:
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
-    config_data = _resolve_env_placeholders(_read_config_file())
+    # 1. Try to load from config file (may be None if file doesn't exist)
+    file_config = _read_config_file()
+    if file_config is not None:
+        file_config = _resolve_env_placeholders(file_config)
+    else:
+        file_config = {}
+
+    # 2. Build config from environment variables
+    env_config = _build_config_from_env()
+
+    # 3. Merge: env vars take precedence over file values
+    merged = _deep_merge(file_config, env_config)
+
+    if not merged:
+        raise RuntimeError(
+            "No configuration found. Provide a config file (FHIR_RESOLVE_CONFIG) "
+            "or set FHIR_RESOLVE_* environment variables."
+        )
+
+    # Ensure sections with defaults exist so Pydantic can apply them
+    merged.setdefault("api", {})
+    merged.setdefault("resolver", {})
+
     try:
-        settings = Settings.model_validate(config_data)
+        settings = Settings.model_validate(merged)
     except ValidationError as exc:
         raise RuntimeError(f"Invalid configuration payload: {exc}") from exc
 

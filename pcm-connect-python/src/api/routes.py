@@ -143,6 +143,7 @@ _HOP_BY_HOP = {
     "upgrade",
     "host",
     "content-length",
+    "content-encoding",
 }
 
 
@@ -202,7 +203,7 @@ async def fhir_proxy(
         kid=kid,
     )
 
-    _STRIP_INBOUND = _HOP_BY_HOP | {"authorization", "x-correlation-id"}
+    _STRIP_INBOUND = _HOP_BY_HOP | {"authorization", "x-correlation-id", "accept-encoding"}
     forward_headers: dict[str, str] = {}
     for k, v in request.headers.items():
         if k.lower() in _STRIP_INBOUND:
