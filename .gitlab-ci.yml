@@ -1,0 +1,193 @@
+stages:
+  - build
+  - deploy
+  - logs
+
+variables:
+  NAMESPACE: pcm-connect
+  PROJECT_NAME: ${CI_PROJECT_NAME}
+
+default:
+  image: docker:24
+  services:
+    - docker:24-dind
+
+# ============== BUILD ==============
+.build: &build-template
+  stage: build
+  when: manual
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ""
+    DOCKER_DRIVER: overlay2
+  before_script:
+    - docker login -u "$CI_REGISTRY_USER" -p "$CI_REGISTRY_PASSWORD" $CI_REGISTRY
+    - docker image prune -af || true
+  script:
+    - docker build --no-cache -t $TAG -t $TAG:${CI_COMMIT_SHORT_SHA} $SERVICE_DIR
+    - docker push $TAG
+    - docker push $TAG:${CI_COMMIT_SHORT_SHA}
+    - echo "$TAG"
+    - echo "$TAG:${CI_COMMIT_SHORT_SHA}"
+  tags:
+    - docker-arm-runner
+
+build-test-fhir-id-resolve:
+  <<: *build-template
+  only:
+    - main
+    - test
+  variables:
+    TAG: $CI_REGISTRY_IMAGE/fhir-id-resolve/test
+    SERVICE_DIR: FHIR_ID_Resolve
+
+build-prod-fhir-id-resolve:
+  <<: *build-template
+  only:
+    - main
+  variables:
+    TAG: $CI_REGISTRY_IMAGE/fhir-id-resolve/prod
+    SERVICE_DIR: FHIR_ID_Resolve
+
+build-test-pcm-connect-python:
+  <<: *build-template
+  only:
+    - main
+    - test
+  variables:
+    TAG: $CI_REGISTRY_IMAGE/pcm-connect-python/test
+    SERVICE_DIR: pcm-connect-python
+
+build-prod-pcm-connect-python:
+  <<: *build-template
+  only:
+    - main
+  variables:
+    TAG: $CI_REGISTRY_IMAGE/pcm-connect-python/prod
+    SERVICE_DIR: pcm-connect-python
+
+# ============== DEPLOY ==============
+.deploy: &deploy-template
+  stage: deploy
+  when: manual
+  before_script:
+    - |
+      if kubectl get namespace $NAMESPACE > /dev/null 2>&1; then
+        echo "Namespace $NAMESPACE already exists, skipping setup"
+      else
+        echo "Creating namespace $NAMESPACE..."
+        kubectl create namespace $NAMESPACE
+        kubectl label namespace $NAMESPACE istio-injection=enabled
+        kubectl delete secret gitlab-secrets -n $NAMESPACE || true
+        echo "$gitlab_secrets" > /tmp/dockerconfigjson
+        kubectl create secret generic gitlab-secrets --type=kubernetes.io/dockerconfigjson --from-file=.dockerconfigjson=/tmp/dockerconfigjson -n $NAMESPACE
+        rm /tmp/dockerconfigjson
+      fi
+  script:
+    - envsubst < $SERVICE_DIR/deployment.yaml | kubectl apply -f -
+    - sleep 5
+    - kubectl rollout restart deployment ${APP} -n $NAMESPACE
+    - kubectl get pods -n $NAMESPACE
+
+deploy-test-fhir-id-resolve:
+  <<: *deploy-template
+  image: gitlab.dev.idgmc.org:4567/devops/images/bitnamisecure/kubectl:1.34.3
+  only:
+    - main
+    - test
+  tags:
+    - solutions-test-eks-il
+  variables:
+    APP: fhir-id-resolve
+    SERVICE_DIR: FHIR_ID_Resolve
+    TAG: $CI_REGISTRY_IMAGE/fhir-id-resolve/test:latest
+    ENV: qa
+    PUBLIC_DOMAIN: "dev.idgmc.org"
+
+deploy-prod-fhir-id-resolve:
+  <<: *deploy-template
+  only:
+    - main
+  tags:
+    - solutions-prod-il
+  variables:
+    APP: fhir-id-resolve
+    SERVICE_DIR: FHIR_ID_Resolve
+    TAG: $CI_REGISTRY_IMAGE/fhir-id-resolve/prod:latest
+    ENV: prod
+    PUBLIC_DOMAIN: "idgmc.org"
+
+deploy-test-pcm-connect-python:
+  <<: *deploy-template
+  image: gitlab.dev.idgmc.org:4567/devops/images/bitnamisecure/kubectl:1.34.3
+  only:
+    - main
+    - test
+  tags:
+    - solutions-test-eks-il
+  variables:
+    APP: pcm-connect-python
+    SERVICE_DIR: pcm-connect-python
+    TAG: $CI_REGISTRY_IMAGE/pcm-connect-python/test:latest
+    ENV: qa
+    PUBLIC_DOMAIN: "dev.idgmc.org"
+
+deploy-prod-pcm-connect-python:
+  <<: *deploy-template
+  only:
+    - main
+  tags:
+    - solutions-prod-il
+  variables:
+    APP: pcm-connect-python
+    SERVICE_DIR: pcm-connect-python
+    TAG: $CI_REGISTRY_IMAGE/pcm-connect-python/prod:latest
+    ENV: prod
+    PUBLIC_DOMAIN: "idgmc.org"
+
+# ============== LOGS ==============
+.logs: &logs-template
+  stage: logs
+  when: manual
+  script:
+    - kubectl logs -l app=${APP} -n $NAMESPACE --tail 1000
+
+logs-test-fhir-id-resolve:
+  <<: *logs-template
+  image: gitlab.dev.idgmc.org:4567/devops/images/bitnamisecure/kubectl:1.34.3
+  only:
+    - main
+    - test
+  tags:
+    - solutions-test-eks-il
+  variables:
+    APP: fhir-id-resolve
+
+logs-prod-fhir-id-resolve:
+  <<: *logs-template
+  only:
+    - main
+  tags:
+    - solutions-prod-il
+  variables:
+    APP: fhir-id-resolve
+
+logs-test-pcm-connect-python:
+  <<: *logs-template
+  image: gitlab.dev.idgmc.org:4567/devops/images/bitnamisecure/kubectl:1.34.3
+  only:
+    - main
+    - test
+  tags:
+    - solutions-test-eks-il
+  variables:
+    APP: pcm-connect-python
+
+logs-prod-pcm-connect-python:
+  <<: *logs-template
+  only:
+    - main
+  tags:
+    - solutions-prod-il
+  variables:
+    APP: pcm-connect-python

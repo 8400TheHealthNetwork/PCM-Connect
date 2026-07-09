@@ -1,0 +1,88 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ${APP}
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP}
+    kubernetes.io/arch: arm64
+    project_name: ${PROJECT_NAME}
+    environment: ${ENV}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: ${APP}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 1
+  minReadySeconds: 5
+  template:
+    metadata:
+      labels:
+        app: ${APP}
+        kubernetes.io/arch: arm64
+        project_name: ${PROJECT_NAME}
+        environment: ${ENV}
+    spec:
+      nodeSelector:
+        kubernetes.io/arch: arm64
+      containers:
+      - name: ${APP}
+        image: ${TAG}
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8000
+          name: port
+          protocol: TCP
+        envFrom:
+          - secretRef:
+              name: pcm-connect-python-env-secret
+      imagePullSecrets:
+      - name: gitlab-secrets
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: ${APP}
+  namespace: ${NAMESPACE}
+  labels:
+    project_name: ${PROJECT_NAME}
+    environment: ${ENV}
+spec:
+  type: ClusterIP
+  selector:
+    app: ${APP}
+  ports:
+    - name: port
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+
+---
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: ${APP}-public-mtls-vs
+  namespace: ${NAMESPACE}
+  labels:
+    app: ${APP}
+    project_name: ${PROJECT_NAME}
+    environment: ${ENV}
+spec:
+  hosts:
+  - '${APP}.${PUBLIC_DOMAIN}'
+  gateways:
+  - istio-ingress/mtls-public-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: ${APP}
+        port:
+          number: 8000

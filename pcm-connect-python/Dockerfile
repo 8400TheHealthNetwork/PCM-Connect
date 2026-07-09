@@ -1,19 +1,28 @@
-FROM python:3.11-slim
+FROM python:3.12-alpine AS builder
+
+RUN apk add --no-cache build-base libffi-dev openssl-dev \
+    && addgroup -S appgroup && adduser -S appuser -G appgroup
 
 WORKDIR /app
-
 COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-COPY src/ ./src/
-COPY config.yaml .
+FROM python:3.12-alpine AS runtime
 
-RUN useradd -r -s /bin/false appuser
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
+    && apk add --no-cache ca-certificates tini
+
+COPY --from=builder /install /usr/local
+
 USER appuser
+WORKDIR /app
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1
+
+COPY --chown=appuser:appgroup src ./src
+COPY --chown=appuser:appgroup config.yaml ./config.yaml
 
 EXPOSE 8000
 
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD python -c "import httpx; httpx.get('http://localhost:8000/health').raise_for_status()"
-
+ENTRYPOINT ["/sbin/tini", "--"]
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
