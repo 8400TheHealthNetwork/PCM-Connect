@@ -22,8 +22,8 @@
 - [x] .gitlab-ci.yml (repo root, per-service build/deploy/logs jobs)
 
 ## Notes
-- Dockerfiles hardened: Alpine base, non-root `appuser`, tini for signal handling.
-- pcm-connect-python uses a multi-stage build (build-base/libffi-dev/openssl-dev in builder for cryptography/aiokafka).
+- Dockerfiles hardened: non-root `appuser`, tini for signal handling.
+- FHIR_ID_Resolve uses Alpine; pcm-connect-python uses `python:3.12-slim` (Debian) because aiokafka has no musl/arm64 wheels and its C extension fails to compile on Alpine.
 - VirtualService hosts use `${APP}.${PUBLIC_DOMAIN}` (not namespace) since both services share the `pcm-connect` namespace.
 - pcm-connect-python requires DS_ADAPTER_* secrets — populate `pcm-connect-python-env-secret` before deploying (see its CLAUDE.md for the full list).
 - FHIR_ID_Resolve config defaults to `config.json`; override with `FHIR_RESOLVE_CONFIG` or `FHIR_RESOLVE_*` env vars via the secret.

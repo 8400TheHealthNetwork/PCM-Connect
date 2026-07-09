@@ -1,16 +1,15 @@
-FROM python:3.12-alpine AS builder
-
-RUN apk add --no-cache build-base libffi-dev openssl-dev \
-    && addgroup -S appgroup && adduser -S appuser -G appgroup
+FROM python:3.12-slim AS builder
 
 WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir --prefix=/install -r requirements.txt
 
-FROM python:3.12-alpine AS runtime
+FROM python:3.12-slim AS runtime
 
-RUN addgroup -S appgroup && adduser -S appuser -G appgroup \
-    && apk add --no-cache ca-certificates tini
+RUN groupadd -r appgroup && useradd -r -g appgroup -s /usr/sbin/nologin appuser \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates tini \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
 
@@ -24,5 +23,5 @@ COPY --chown=appuser:appgroup config.yaml ./config.yaml
 
 EXPOSE 8000
 
-ENTRYPOINT ["/sbin/tini", "--"]
+ENTRYPOINT ["/usr/bin/tini", "--"]
 CMD ["uvicorn", "src.main:app", "--host", "0.0.0.0", "--port", "8000"]
