@@ -20,7 +20,7 @@ def _load_pem(value: str) -> str:
 from src.api.routes import router
 from src.auth.mtls import create_mtls_client
 from src.auth.pcm_client import PCMClient
-from src.config import load_config
+from src.config import AppConfig, load_config
 from src.errors.handlers import register_exception_handlers
 from src.fhir.client import FHIRClient
 from src.identity.id_replacement import IDReplacementClient
@@ -32,10 +32,7 @@ from src.middleware.timing import TimingMiddleware
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncIterator[None]:
-    config_path = os.environ.get("DS_ADAPTER_CONFIG_PATH", "config.yaml")
-    config = load_config(config_path)
-    app.state.config = config
-    configure_logging(config.logging.level)
+    config: AppConfig = app.state.config
 
     pcm_http = create_mtls_client(config.pcm)
     id_http = httpx.AsyncClient()
@@ -74,11 +71,6 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
     app.state.audit_service = AuditService.from_config(config.audit)
     await app.state.audit_service.start()
 
-    # Phase 8 — observability
-    from src.observability.setup import init_otel
-
-    init_otel(app, config.otel)
-
     try:
         yield
     finally:
@@ -88,13 +80,27 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         await fhir_http.aclose()
 
 
-def create_app() -> FastAPI:
+def create_app(config: AppConfig | None = None) -> FastAPI:
+    if config is None:
+        config_path = os.environ.get("DS_ADAPTER_CONFIG_PATH", "config.yaml")
+        config = load_config(config_path)
+
+    configure_logging(config.logging.level)
+
     app = FastAPI(title="DS Adapter", lifespan=lifespan)
+    app.state.config = config
     app.add_middleware(AuditMiddleware)
     app.add_middleware(TimingMiddleware)
     app.add_middleware(CorrelationMiddleware)
     register_exception_handlers(app)
     app.include_router(router)
+
+    # Instrument the FastAPI application before Starlette constructs its
+    # middleware stack. This keeps the incoming server span active while the
+    # request performs its instrumented HTTPX calls, so they share one trace.
+    from src.observability.setup import init_otel
+
+    init_otel(app, config.otel)
     return app
 
 
