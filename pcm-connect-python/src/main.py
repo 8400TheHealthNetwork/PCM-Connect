@@ -53,8 +53,9 @@ async def lifespan(app: FastAPI) -> AsyncIterator[None]:
         client_id=os.environ.get("DS_ADAPTER_CLIENT_ID", "ds-adapter"),
         client_signing_key=_load_pem(os.environ.get("DS_ADAPTER_PCM_CLIENT_KEY", "")),
         client_assertion_algorithm=config.pcm.client_assertion_algorithm,
+        client_assertion_audience=config.pcm.client_assertion_audience,
+        token_scope=config.pcm.token_scope,
         introspect_auth_method=config.pcm.introspect_auth_method,
-        token_resource=config.pcm.token_resource,
     )
     app.state.id_replacement_client = IDReplacementClient(
         http=id_http,

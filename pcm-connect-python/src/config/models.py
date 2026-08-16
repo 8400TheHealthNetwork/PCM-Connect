@@ -19,10 +19,10 @@ class PCMConfig(_Strict):
     introspect_endpoint: str = "/introspect"
     mtls_client: bool = True
     client_assertion_algorithm: Literal["ES256", "RS256"] = "ES256"
+    client_assertion_audience: str | None = None
+    token_scope: str = Field(default="system/*.crus", min_length=1)
     verify_hostname: bool = True
     introspect_auth_method: Literal["bearer", "mtls"] = "bearer"
-    # RFC 8707 resource indicator. Required by some PCMs on /token. Leave None to omit.
-    token_resource: str | None = None
 
 
 class FHIRServerConfig(_Strict):

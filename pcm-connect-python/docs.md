@@ -83,7 +83,7 @@ sequenceDiagram
     Note over AD: 5. Compare cnf thumbprint with client cert (warning only)
 
     Note over AD: 6. ID Replacement
-    AD->>IDS: POST /api/v1/resolve {national_id: {system:"...", value:"000000018"}}
+    AD->>IDS: POST /api/v1/resolve {identifier: {system:"...", value:"000000018"}}
     IDS-->>AD: {patient_id: "12345", resource_reference: "Patient/12345"}
 
     Note over AD: 7. Mint internal JWT (ES256)
@@ -180,6 +180,7 @@ class PCMConfig(BaseModel):
     base_url: str  # e.g. "https://pcm-core:3000"
     token_endpoint: str = "/token"
     introspect_endpoint: str = "/introspect"
+    token_scope: str = "system/*.crus"
     mtls_client: bool = True  # True = adapter does mTLS, False = external layer
 
 
@@ -313,7 +314,7 @@ class NationalId(BaseModel):
 
 
 class IDReplacementRequest(BaseModel):
-    national_id: NationalId
+    identifier: NationalId
 
 
 class IDReplacementResponse(BaseModel):
@@ -568,9 +569,9 @@ paths:
           application/json:
             schema:
               type: object
-              required: [national_id]
+              required: [identifier]
               properties:
-                national_id:
+                identifier:
                   type: object
                   required: [system, value]
                   properties:

@@ -50,6 +50,7 @@ def test_load_yaml_returns_appconfig(tmp_path: Path) -> None:
     assert cfg.server.port == 8000
     assert cfg.jwt.algorithm == "ES256"
     assert cfg.audit.targets.file.enabled is True
+    assert cfg.pcm.token_scope == "system/*.crus"
 
 
 def test_env_override_top_level(tmp_path: Path) -> None:
@@ -57,6 +58,22 @@ def test_env_override_top_level(tmp_path: Path) -> None:
     cfg = load_config(_write(tmp_path, MINIMAL_YAML), env=env)
 
     assert cfg.pcm.base_url == "https://override:9999"
+
+
+def test_env_override_client_assertion_audience(tmp_path: Path) -> None:
+    audience = "https://pcm.example:4501/token"
+    env = {"DS_ADAPTER_PCM_CLIENT_ASSERTION_AUDIENCE": audience}
+    cfg = load_config(_write(tmp_path, MINIMAL_YAML), env=env)
+
+    assert cfg.pcm.client_assertion_audience == audience
+
+
+def test_env_override_pcm_token_scope(tmp_path: Path) -> None:
+    scope = "consent.read consent.write fhir.read"
+    env = {"DS_ADAPTER_PCM_TOKEN_SCOPE": scope}
+    cfg = load_config(_write(tmp_path, MINIMAL_YAML), env=env)
+
+    assert cfg.pcm.token_scope == scope
 
 
 def test_env_override_section_with_underscore(tmp_path: Path) -> None:

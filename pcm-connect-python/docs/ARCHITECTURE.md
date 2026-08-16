@@ -38,7 +38,7 @@ sequenceDiagram
     PCM-->>Adapter: access_token (cached until exp - skew)
     Adapter->>PCM: POST /introspect (Bearer adapter_token, body: token=opaque)
     PCM-->>Adapter: {active, patient, scope, baskets, consent_id, ...}
-    Adapter->>IDR: POST /api/v1/resolve (national_id)
+    Adapter->>IDR: POST /api/v1/resolve (identifier)
     IDR-->>Adapter: {patient_id}
     Adapter->>Adapter: mint internal JWT (kid in header, iss/aud/scope/baskets in payload)
     Adapter->>FHIR: GET /Observation (Bearer internal_jwt)
@@ -64,7 +64,11 @@ The adapter exposes itself as the OAuth issuer that the FHIR server trusts.
 The internal JWT carries a `kid` matching the JWK thumbprint advertised
 at `/.well-known/jwks.json`. `jwt.issuer` MUST equal the URL the FHIR
 server is configured to trust as `iss`. `jwt.audience` MUST equal one of
-the audience values the FHIR server accepts.
+the audience values the FHIR server accepts. The audience is a logical
+resource identifier, not necessarily the URL used for the network hop. For
+example, an adapter may call an internal HTTP address while a gateway
+originates TLS to the FHIR server; the JWT must still use the canonical HTTPS
+audience configured at the FHIR server.
 
 ## mTLS Modes
 
@@ -129,10 +133,20 @@ material.
 
 Set `pcm.mtls_client: false`.
 
+Moving mTLS to an external component moves only the TLS handshake. It does
+not remove application-level OAuth requirements. This adapter signs the PCM
+`client_assertion` itself, so it still needs the private key associated with
+its registered PCM client identity. The certificate may also be mounted with
+the key when it is how that identity is distributed or validated, even though
+the adapter does not present it during the externally terminated TLS
+handshake. The gateway needs its own access to the certificate and private key
+that it presents to PCM; these may represent the same registered identity,
+subject to the PCM deployment's trust model.
+
 ```mermaid
 flowchart LR
     subgraph Pod["Adapter Pod"]
-        Adapter["DS Adapter<br/>(no certs)"]
+        Adapter["DS Adapter<br/>(holds assertion signing key)"]
         Sidecar["Istio Sidecar /<br/>API Gateway proxy<br/>(holds client.crt + client.key)"]
     end
     SP[Service Provider]
@@ -160,10 +174,10 @@ pcm:
 ```
 
 ```bash
-# env — no cert paths needed on the adapter
-# DS_ADAPTER_PCM_CLIENT_CERT=  (unset)
-# DS_ADAPTER_PCM_CLIENT_KEY=   (unset)
-# DS_ADAPTER_PCM_CA_CERT=      (unset)
+# env — TLS certificate handling is external, but OAuth signing remains local
+DS_ADAPTER_PCM_CLIENT_KEY=certs/client.key
+# DS_ADAPTER_PCM_CLIENT_CERT may also be mounted as registered identity material
+# DS_ADAPTER_PCM_CA_CERT is not needed when the adapter does not establish TLS
 ```
 
 In Istio, this is typically a `DestinationRule` with
@@ -200,7 +214,10 @@ makes a plain HTTP call to the gateway.
 | Multi-region/multi-cluster cert sharing? | Manual | Native to the mesh |
 
 Both modes carry identical FHIR-side semantics. The adapter is
-agnostic past the configuration switch.
+agnostic past the configuration switch. In both modes, distinguish the
+transport credential used for the mTLS handshake from the private key used by
+the adapter to sign its OAuth `client_assertion`. They can be based on the same
+client identity, but they are used at different protocol layers.
 
 ## Inbound mTLS (Service Provider → Adapter)
 

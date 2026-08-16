@@ -9,6 +9,15 @@ pcm:
   introspect_endpoint: "/introspect"
   mtls_client: true
   client_assertion_algorithm: "RS256"
+  # Optional logical audience for the client_assertion JWT. Set this when the
+  # transport URL differs from PCM's public token URL (for example, when an
+  # Istio egress gateway originates TLS for an internal HTTP connection).
+  # Defaults to base_url + token_endpoint.
+  client_assertion_audience: null
+  # Machine-token scope requested from PCM. MOH production uses system/*.crus;
+  # the MOH test environment currently requires an explicit override to
+  # consent.read consent.write fhir.read.
+  token_scope: "system/*.crus"
   # Connectathon server cert is CN=pcm-core, not the ELB hostname.
   # The chain is still verified against rootCA.crt; only SAN matching is skipped.
   verify_hostname: false

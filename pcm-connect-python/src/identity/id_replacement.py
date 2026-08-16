@@ -36,7 +36,7 @@ class IDReplacementClient:
             national_id = national_id[len(prefix):]
 
         body = {
-            "national_id": {
+            "identifier": {
                 "system": NATIONAL_ID_SYSTEM,
                 "value": national_id,
             }

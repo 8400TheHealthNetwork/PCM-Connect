@@ -127,12 +127,37 @@ docker run \
 | `DS_ADAPTER_PCM_INTROSPECT_ENDPOINT` | No | No | `/introspect` | Token introspection endpoint path on PCM |
 | `DS_ADAPTER_PCM_MTLS_CLIENT` | No | No | `true` | Enable mTLS for PCM connections |
 | `DS_ADAPTER_PCM_CLIENT_ASSERTION_ALGORITHM` | No | No | `ES256` | Algorithm for client_assertion JWT (`ES256` / `RS256`) |
+| `DS_ADAPTER_PCM_CLIENT_ASSERTION_AUDIENCE` | No | No | PCM token URL | Override the client-assertion JWT `aud`. Use PCM's canonical HTTPS token URL when a proxy or service mesh uses a different internal transport URL. |
+| `DS_ADAPTER_PCM_TOKEN_SCOPE` | No | No | `system/*.crus` | Machine-token scope requested from PCM `/token`; the current MOH test environment requires `consent.read consent.write fhir.read` |
 | `DS_ADAPTER_PCM_VERIFY_HOSTNAME` | No | No | `true` | Verify PCM server hostname against certificate SAN |
 | `DS_ADAPTER_PCM_INTROSPECT_AUTH_METHOD` | No | No | `bearer` | Auth method for `/introspect`: `bearer` or `mtls` |
-| `DS_ADAPTER_PCM_TOKEN_RESOURCE` | No | No | `null` | RFC 8707 resource indicator for `/token` requests |
-| `DS_ADAPTER_PCM_CLIENT_CERT` | Yes (if mTLS) | **Yes** | — | Path or PEM content of mTLS client certificate |
-| `DS_ADAPTER_PCM_CLIENT_KEY` | Yes (if mTLS) | **Yes** | — | Path or PEM content of mTLS client private key |
-| `DS_ADAPTER_PCM_CA_CERT` | Yes (if mTLS) | **Yes** | — | Path or PEM content of CA certificate for PCM verification |
+| `DS_ADAPTER_PCM_CLIENT_CERT` | Yes (if application terminates mTLS) | **Yes** | — | Path or PEM content of the mTLS client certificate; it may also be mounted as registered client identity material when TLS is external |
+| `DS_ADAPTER_PCM_CLIENT_KEY` | Yes (for token acquisition and application mTLS) | **Yes** | — | Private key used to sign the PCM OAuth `client_assertion`; also used for mTLS when the application terminates TLS |
+| `DS_ADAPTER_PCM_CA_CERT` | Yes (if application terminates mTLS) | **Yes** | — | Path or PEM content of the CA certificate used by the application to verify PCM |
+
+The adapter sends the configured `pcm.token_scope` when it acquires its own PCM
+access token. The production default is `system/*.crus`; set
+`DS_ADAPTER_PCM_TOKEN_SCOPE="consent.read consent.write fhir.read"` for the
+current MOH test environment. This machine-to-machine scope is separate from
+the organization/consent scope returned by PCM introspection and carried into
+the internal FHIR JWT.
+
+When the application terminates PCM mTLS, provide the PEM material through the
+platform's secret-management mechanism, preferably as mounted files. Set
+`DS_ADAPTER_PCM_CLIENT_KEY`, `DS_ADAPTER_PCM_CLIENT_CERT`, and
+`DS_ADAPTER_PCM_CA_CERT` to the mounted file paths. Use the canonical HTTPS PCM
+URL and set `DS_ADAPTER_PCM_MTLS_CLIENT=true`. Any intermediate network proxy
+must pass the application's TLS connection through without originating a
+second PCM mTLS session.
+
+If a sidecar, gateway, or egress proxy terminates PCM mTLS instead, set
+`DS_ADAPTER_PCM_MTLS_CLIENT=false` and configure the external component with
+the certificate it must present to PCM. This changes only the TLS transport.
+The adapter still creates the OAuth `client_assertion`, so
+`DS_ADAPTER_PCM_CLIENT_KEY` must remain available to the container. Keep
+`DS_ADAPTER_CLIENT_ID` and `DS_ADAPTER_PCM_CLIENT_ASSERTION_AUDIENCE` aligned
+with the client identity and canonical token endpoint registered at PCM; do
+not derive them from an internal proxy URL.
 
 ### 4.4 FHIR Server
 
@@ -141,6 +166,13 @@ docker run \
 | `DS_ADAPTER_FHIR_SERVER_BASE_URL` | Yes | No | — | Internal FHIR server base URL |
 | `DS_ADAPTER_FHIR_SERVER_PROTOCOL` | No | No | `https` | `http` or `https` |
 | `DS_ADAPTER_FHIR_SERVER_TIMEOUT_SECONDS` | No | No | `30` | HTTP timeout for FHIR requests |
+
+`DS_ADAPTER_FHIR_SERVER_BASE_URL` is the transport address used by the
+adapter. It may be an internal HTTP URL when a sidecar, gateway, or egress
+proxy originates TLS to the FHIR server. `DS_ADAPTER_JWT_AUDIENCE` is a
+separate identity value: it must be the canonical audience accepted by the
+FHIR server, commonly its external HTTPS FHIR URL. Do not automatically copy
+the internal transport URL into the JWT audience.
 
 ### 4.5 ID Replacement (FHIR ID Resolve)
 
@@ -158,7 +190,7 @@ docker run \
 |---|---|---|---|---|
 | `DS_ADAPTER_JWT_ALGORITHM` | No | No | `ES256` | Signing algorithm (`ES256` / `RS256`) |
 | `DS_ADAPTER_JWT_ISSUER` | No | No | `ds-adapter` | JWT `iss` claim. Must match the value the FHIR server trusts |
-| `DS_ADAPTER_JWT_AUDIENCE` | No | No | `null` (falls back to `fhir_server.base_url`) | JWT `aud` claim. Comma-separated for multiple values |
+| `DS_ADAPTER_JWT_AUDIENCE` | No | No | `null` (falls back to `fhir_server.base_url`) | JWT `aud` claim. Comma-separated for multiple values. Set explicitly to the FHIR server's canonical audience when the transport URL differs because TLS is terminated externally |
 | `DS_ADAPTER_JWT_EXPIRY_SECONDS` | No | No | `300` | JWT lifetime in seconds |
 | `DS_ADAPTER_JWT_SIGNING_KEY` | Yes | **Yes** | — | PEM-encoded private key or path to PEM file |
 
@@ -303,6 +335,7 @@ data:
   DS_ADAPTER_JWT_AUDIENCE: "https://fhir-prod:8080/fhir/r4"
   DS_ADAPTER_CLIENT_ID: "https://my-org.example.com/oauth/client"
   DS_ADAPTER_PCM_CLIENT_ASSERTION_ALGORITHM: "RS256"
+  DS_ADAPTER_PCM_CLIENT_ASSERTION_AUDIENCE: "https://pcm-prod:4501/token"
   DS_ADAPTER_PCM_INTROSPECT_AUTH_METHOD: "bearer"
   DS_ADAPTER_OTEL_ENDPOINT: "http://otel-collector:4317"
   DS_ADAPTER_LOGGING_LEVEL: "info"

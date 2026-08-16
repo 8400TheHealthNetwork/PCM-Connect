@@ -42,7 +42,8 @@
 
 ### Tasks
 - [ ] Create directory layout per spec §3
-- [ ] `requirements.txt` — FastAPI, uvicorn, httpx, PyJWT, cryptography, pydantic-settings, PyYAML, structlog, aiokafka, opentelemetry-sdk, pytest, pytest-asyncio, respx
+- [ ] `requirements.txt` — runtime dependencies: FastAPI, uvicorn, httpx, PyJWT, cryptography, pydantic-settings, PyYAML, structlog, aiokafka, opentelemetry-sdk
+- [ ] `requirements-dev.txt` — runtime requirements plus pytest, pytest-asyncio, and respx for development and tests
 - [ ] `src/config/models.py` — Pydantic models for every section in spec §4.1 (`ServerConfig`, `PCMConfig`, `FHIRConfig`, `IDReplacementConfig`, `JWTConfig`, `AuditConfig` (+ targets), `LoggingConfig`, `OTelConfig`, `VerificationConfig`, root `AppConfig`)
 - [ ] `src/config/settings.py` — `load_config()` reads `config.yaml`, applies `DS_ADAPTER_<SECTION>_<KEY>` env overrides, validates → `AppConfig`. On failure raise `ConfigurationError` with code `CFG_001`
 - [ ] `src/main.py` — FastAPI app factory, lifespan that loads config and stores it on `app.state.config`

@@ -8,7 +8,7 @@ PCM token introspection → ID replacement → internal JWT minting → FHIR for
 
 ```bash
 python3 -m venv .venv
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-dev.txt
 .venv/bin/uvicorn src.main:app --reload
 ```
 
@@ -48,6 +48,10 @@ DS_ADAPTER_AUDIT_TARGETS_FILE_PATH=/tmp/audit.log
 | `DS_ADAPTER_PCM_CLIENT_CERT` | PEM cert path (mTLS) |
 | `DS_ADAPTER_PCM_CA_CERT` | PEM CA path (mTLS) |
 | `DS_ADAPTER_ID_REPLACEMENT_AUTH` | Auth header value for the org's ID resolver |
+
+For organization onboarding, PCM registration values, the exact token and
+introspection requests, required secret material, and staged troubleshooting,
+see the [PCM integration guide](docs/pcm-integration.md).
 
 ## Endpoints
 

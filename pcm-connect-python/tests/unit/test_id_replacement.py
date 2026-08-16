@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import json
+
 import httpx
 import pytest
 import respx
@@ -27,12 +29,19 @@ def _client() -> IDReplacementClient:
 
 @respx.mock
 async def test_resolve_success() -> None:
-    respx.post("http://id/api/v1/resolve").mock(
+    route = respx.post("http://id/api/v1/resolve").mock(
         return_value=httpx.Response(200, json={"patient_id": "P-42", "resource_reference": "Patient/P-42"})
     )
 
     result = await _client().resolve_patient_id("000000018")
+
     assert result == "P-42"
+    assert json.loads(route.calls[0].request.content) == {
+        "identifier": {
+            "system": "http://fhir.health.gov.il/identifier/il-national-id",
+            "value": "000000018",
+        }
+    }
 
 
 @respx.mock

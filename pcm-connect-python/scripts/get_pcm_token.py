@@ -1,15 +1,10 @@
-"""Fetch an access token from PCM /token using mTLS + RS256 client_assertion.
-
-The connectathon PCM requires an RFC 8707 'resource' parameter in the token
-request. Pass it via --resource or DS_ADAPTER_PCM_TOKEN_RESOURCE env var.
+"""Fetch an access token from PCM /token using mTLS + client_assertion.
 
 Usage:
-    python scripts/get_pcm_token.py [--resource <uri>]
-    python scripts/get_pcm_token.py --resource https://connecthon-python.demo
+    python scripts/get_pcm_token.py
 """
 from __future__ import annotations
 
-import argparse
 import asyncio
 import os
 import sys
@@ -24,7 +19,7 @@ from src.config import load_config
 from src.errors import DSAdapterError
 
 
-async def main(resource: str | None) -> int:
+async def main() -> int:
     config = load_config(ROOT / "config.yaml")
 
     key_path = os.environ.get("DS_ADAPTER_PCM_CLIENT_KEY")
@@ -43,14 +38,15 @@ async def main(resource: str | None) -> int:
         client_id=client_id,
         client_signing_key=signing_key,
         client_assertion_algorithm=config.pcm.client_assertion_algorithm,
+        client_assertion_audience=config.pcm.client_assertion_audience,
+        token_scope=config.pcm.token_scope,
         introspect_auth_method=config.pcm.introspect_auth_method,
-        token_resource=resource or config.pcm.token_resource,
     )
 
     print(f"PCM:        {config.pcm.base_url}")
     print(f"client_id:  {client_id}")
     print(f"alg:        {config.pcm.client_assertion_algorithm}")
-    print(f"resource:   {resource or config.pcm.token_resource or '(none)'}")
+    print(f"scope:      {config.pcm.token_scope}")
     print()
 
     try:
@@ -67,7 +63,4 @@ async def main(resource: str | None) -> int:
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--resource", help="RFC 8707 resource indicator URI")
-    args = parser.parse_args()
-    sys.exit(asyncio.run(main(args.resource)))
+    sys.exit(asyncio.run(main()))

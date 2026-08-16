@@ -111,6 +111,7 @@ ds-adapter/
 ├── config.yaml
 ├── Dockerfile
 ├── requirements.txt
+├── requirements-dev.txt
 ├── docker-compose.yaml
 └── README.md
 ```
@@ -131,6 +132,7 @@ pcm:
   base_url: "https://pcm-core:3000"
   token_endpoint: "/token"
   introspect_endpoint: "/introspect"
+  token_scope: "system/*.crus"
   mtls_client: true
 
 fhir_server:
@@ -238,6 +240,7 @@ DS_ADAPTER_ID_REPLACEMENT_AUTH=<org-specific credentials>
         Body: grant_type=client_credentials
               &client_assertion_type=urn:ietf:params:oauth:client-assertion-type:jwt-bearer
               &client_assertion=<signed_jwt>
+              &scope=<pcm.token_scope>
      c. Parse response: {access_token, token_type, expires_in}
      d. Cache: store access_token with expires_at = now + expires_in
 
@@ -260,7 +263,7 @@ DS_ADAPTER_ID_REPLACEMENT_AUTH=<org-specific credentials>
    - POST id_replacement.base_url + id_replacement.endpoint
      Content-Type: application/json
      Authorization: <from DS_ADAPTER_ID_REPLACEMENT_AUTH>
-     Body: {"national_id": {"system": "http://fhir.health.gov.il/identifier/il-national-id", "value": "<patient_from_introspection>"}}
+     Body: {"identifier": {"system": "http://fhir.health.gov.il/identifier/il-national-id", "value": "<patient_from_introspection>"}}
    - On success: extract patient_id
    - On 404: return 404 (ID_002)
    - On timeout/error: retry up to id_replacement.retries times with backoff
@@ -557,7 +560,7 @@ client = httpx.AsyncClient(timeout=10.0)
 ## 12. Dockerfile
 
 ```dockerfile
-FROM python:3.11-slim
+FROM python:3.12-slim
 
 WORKDIR /app
 
@@ -680,7 +683,7 @@ Authorization: <org-specific>
 
 Request:
 {
-  "national_id": {
+  "identifier": {
     "system": "http://fhir.health.gov.il/identifier/il-national-id",
     "value": "000000018"
   }

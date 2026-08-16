@@ -42,13 +42,6 @@ async def main() -> int:
     signing_key = Path(key_path).read_text(encoding="utf-8")
     client_id = os.environ.get("DS_ADAPTER_CLIENT_ID", "ds-adapter")
 
-    # Default token_resource to the clientId — that's what the connectathon PCM accepts.
-    token_resource = (
-        os.environ.get("DS_ADAPTER_PCM_TOKEN_RESOURCE")
-        or config.pcm.token_resource
-        or client_id
-    )
-
     pcm_http = create_mtls_client(config.pcm)
     pcm = PCMClient(
         http=pcm_http,
@@ -58,14 +51,15 @@ async def main() -> int:
         client_id=client_id,
         client_signing_key=signing_key,
         client_assertion_algorithm=config.pcm.client_assertion_algorithm,
+        client_assertion_audience=config.pcm.client_assertion_audience,
+        token_scope=config.pcm.token_scope,
         introspect_auth_method=config.pcm.introspect_auth_method,
-        token_resource=token_resource,
     )
 
     print(f"PCM:        {config.pcm.base_url}")
     print(f"client_id:  {client_id}")
     print(f"alg:        {config.pcm.client_assertion_algorithm}")
-    print(f"resource:   {token_resource}")
+    print(f"scope:      {config.pcm.token_scope}")
     print(f"introspect: {config.pcm.introspect_auth_method}")
     print()
 

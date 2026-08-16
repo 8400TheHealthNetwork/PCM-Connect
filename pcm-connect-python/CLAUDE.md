@@ -19,7 +19,7 @@ Wiring is in `src/main.py` (lifespan); HTTP clients (`pcm_http`, `id_http`, `fhi
 ## Common commands
 
 ```bash
-.venv/bin/pip install -r requirements.txt
+.venv/bin/pip install -r requirements-dev.txt
 .venv/bin/uvicorn src.main:app --reload
 .venv/bin/pytest tests -v
 .venv/bin/pytest tests/unit/test_pcm_client.py::test_name -v   # single test
@@ -34,17 +34,21 @@ docker compose up --build                                        # adapter + moc
 
 All config models in `src/config/models.py` use `extra="forbid"` — adding a new field to YAML or env without updating the model raises `CFG_001` at startup.
 
-Required env-only secrets (never in YAML):
+Runtime credentials and identity settings:
 
-| Variable | Purpose |
-|---|---|
-| `DS_ADAPTER_JWT_SIGNING_KEY` | PEM ES256 private key for internal JWT minting |
-| `DS_ADAPTER_PCM_CLIENT_KEY` | PEM key for `client_assertion` signing |
-| `DS_ADAPTER_PCM_CLIENT_CERT` | PEM cert path (mTLS) |
-| `DS_ADAPTER_PCM_CA_CERT` | PEM CA path (mTLS) |
-| `DS_ADAPTER_ID_REPLACEMENT_AUTH` | Auth header value for the ID resolver (org-specific) |
-| `DS_ADAPTER_CLIENT_ID` | OAuth `clientId` — used as `iss`/`sub` of the client_assertion |
-| `DS_ADAPTER_PCM_TOKEN_RESOURCE` | Optional RFC 8707 resource indicator on `/token` |
+| Variable | Sensitive | Purpose |
+|---|---|---|
+| `DS_ADAPTER_JWT_SIGNING_KEY` | Yes | PEM ES256 private key for internal JWT minting |
+| `DS_ADAPTER_PCM_CLIENT_KEY` | Yes | PEM key for `client_assertion` signing |
+| `DS_ADAPTER_PCM_CLIENT_ASSERTION_AUDIENCE` | No | Optional canonical PCM token URL used as the client-assertion JWT `aud` when it differs from the transport URL; it may also be set as `pcm.client_assertion_audience` in YAML |
+| `DS_ADAPTER_PCM_CLIENT_CERT` | No | PEM certificate path for mTLS; protect its integrity even though the certificate is public |
+| `DS_ADAPTER_PCM_CA_CERT` | No | PEM CA path for mTLS trust configuration |
+| `DS_ADAPTER_ID_REPLACEMENT_AUTH` | Yes | Auth header value for the ID resolver (org-specific) |
+| `DS_ADAPTER_CLIENT_ID` | No | OAuth `clientId` — used as `iss`/`sub` of the client_assertion |
+
+Private keys and authorization values must remain outside YAML and source
+control. Non-secret identity values may be managed as ordinary deployment
+configuration.
 
 `_load_pem` in `src/main.py` accepts either a PEM blob or a file path — keep that flexibility when adding new key inputs.
 
@@ -61,6 +65,12 @@ Every error is a FHIR `OperationOutcome` with a stable code under `http://ds-ada
 OTel auto-instrumentation for FastAPI + httpx is enabled in `init_otel`. Manual spans wrap the four pipeline calls — keep instrumentation at call sites in `src/api/routes.py` consistent (currently per-step `metrics.*_DURATION.observe(...)`). `/metrics` returns Prometheus text; `/health` is unconditional 200; `/ready` does HEAD probes against `pcm.base_url` and `fhir_server.base_url` (5s timeout each, 503 if either fails).
 
 ## Connectathon-specific gotchas
+
+- PCM client-credentials `/token` requests use `pcm.token_scope`, configurable
+  through `DS_ADAPTER_PCM_TOKEN_SCOPE`. It defaults to the MOH production scope
+  `system/*.crus`; the MOH test environment currently uses
+  `consent.read consent.write fhir.read`. This machine scope is separate from
+  the dynamic organization/consent scope returned later by `/introspect`.
 
 - `pcm.verify_hostname: false` is intentional — the connectathon ELB's cert is `CN=pcm-core` and the SAN doesn't match the ELB hostname; the chain is still verified against `rootCA.crt`.
 - `pcm.introspect_auth_method: private_key_jwt` is the connectathon flow. The "spec default" `bearer` flow (acquire adapter token via `client_credentials`, then `Authorization: Bearer` on introspect) still exists in `PCMClient.get_token()` and is used when `introspect_auth_method: bearer`.

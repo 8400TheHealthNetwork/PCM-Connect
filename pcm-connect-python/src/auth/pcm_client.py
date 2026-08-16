@@ -15,6 +15,7 @@ from src.errors import DSAdapterError
 log = structlog.get_logger()
 
 CLIENT_ASSERTION_TYPE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer"
+DEFAULT_PCM_ACCESS_TOKEN_SCOPE = "system/*.crus"
 
 
 class IntrospectionResponse(BaseModel):
@@ -41,8 +42,9 @@ class PCMClient:
         client_id: str,
         client_signing_key: str,
         client_assertion_algorithm: str = "ES256",
+        client_assertion_audience: str | None = None,
+        token_scope: str = DEFAULT_PCM_ACCESS_TOKEN_SCOPE,
         introspect_auth_method: str = "bearer",
-        token_resource: str | None = None,
         token_refresh_buffer_seconds: int = 5,
     ) -> None:
         self._http = http
@@ -52,8 +54,9 @@ class PCMClient:
         self._client_id = client_id
         self._signing_key = client_signing_key
         self._algorithm = client_assertion_algorithm
+        self._client_assertion_audience = client_assertion_audience
+        self._token_scope = token_scope
         self._introspect_auth_method = introspect_auth_method
-        self._token_resource = token_resource
         self._refresh_buffer = token_refresh_buffer_seconds
         self._cached_token: str | None = None
         self._cached_until: float = 0.0
@@ -75,7 +78,7 @@ class PCMClient:
 
             assertion = mint_client_assertion(
                 client_id=self._client_id,
-                audience=self.token_url,
+                audience=self._client_assertion_audience or self.token_url,
                 signing_key=self._signing_key,
                 algorithm=self._algorithm,
             )
@@ -83,9 +86,8 @@ class PCMClient:
                 "grant_type": "client_credentials",
                 "client_assertion_type": CLIENT_ASSERTION_TYPE,
                 "client_assertion": assertion,
+                "scope": self._token_scope,
             }
-            if self._token_resource:
-                form["resource"] = self._token_resource
             body = urlencode(form)
             try:
                 resp = await self._http.post(
@@ -102,11 +104,37 @@ class PCMClient:
             if resp.status_code >= 400:
                 raise DSAdapterError(f"PCM token error {resp.status_code}", code="PCM_002")
 
-            data = resp.json()
+            try:
+                data = resp.json()
+            except ValueError as exc:
+                # Some gateways mask upstream authorization failures as HTTP
+                # 200 HTML responses. Treat a non-JSON token response as an
+                # authentication failure instead of leaking JSONDecodeError as
+                # an internal 500.
+                log.warning(
+                    "pcm_token_invalid_response",
+                    status=resp.status_code,
+                    content_type=resp.headers.get("content-type"),
+                    upstream_error=resp.headers.get("x-amzn-errortype"),
+                )
+                raise DSAdapterError("PCM token response was not JSON", code="PCM_002") from exc
+
+            if not isinstance(data, dict):
+                log.warning(
+                    "pcm_token_invalid_response",
+                    status=resp.status_code,
+                    content_type=resp.headers.get("content-type"),
+                )
+                raise DSAdapterError("PCM token response was not an object", code="PCM_002")
+
             access_token = data.get("access_token")
-            expires_in = int(data.get("expires_in", 60))
             if not access_token:
                 raise DSAdapterError("PCM did not return access_token", code="PCM_002")
+
+            try:
+                expires_in = int(data.get("expires_in", 60))
+            except (TypeError, ValueError) as exc:
+                raise DSAdapterError("PCM returned invalid expires_in", code="PCM_002") from exc
 
             self._cached_token = access_token
             self._cached_until = now + max(expires_in - self._refresh_buffer, 1)

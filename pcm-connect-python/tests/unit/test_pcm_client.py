@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from urllib.parse import parse_qs
+
 import httpx
+import jwt
 import pytest
 import respx
 
@@ -32,6 +35,65 @@ async def test_get_token_success(es256_keypair) -> None:
 
 
 @respx.mock
+async def test_get_token_uses_explicit_client_assertion_audience(es256_keypair) -> None:
+    private_pem, _ = es256_keypair
+    pcm = PCMClient(
+        http=httpx.AsyncClient(),
+        base_url="http://pcm-transport:4501",
+        token_endpoint="/token",
+        introspect_endpoint="/introspect",
+        client_id="adapter-test",
+        client_signing_key=private_pem,
+        client_assertion_audience="https://pcm-public:4501/token",
+    )
+    route = respx.post("http://pcm-transport:4501/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-1", "expires_in": 60})
+    )
+
+    await pcm.get_token()
+
+    form = parse_qs(route.calls[0].request.content.decode())
+    claims = jwt.decode(form["client_assertion"][0], options={"verify_signature": False})
+    assert claims["aud"] == "https://pcm-public:4501/token"
+
+
+@respx.mock
+async def test_get_token_sends_configured_pcm_scope_and_omits_resource(es256_keypair) -> None:
+    private_pem, _ = es256_keypair
+    pcm = PCMClient(
+        http=httpx.AsyncClient(),
+        base_url="https://pcm",
+        token_endpoint="/token",
+        introspect_endpoint="/introspect",
+        client_id="adapter-test",
+        client_signing_key=private_pem,
+        token_scope="consent.read consent.write fhir.read",
+    )
+    route = respx.post("https://pcm/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-1", "expires_in": 60})
+    )
+
+    await pcm.get_token()
+
+    form = parse_qs(route.calls[0].request.content.decode())
+    assert form["scope"] == ["consent.read consent.write fhir.read"]
+    assert "resource" not in form
+
+
+@respx.mock
+async def test_get_token_uses_production_scope_by_default(es256_keypair) -> None:
+    pcm = _make_client(es256_keypair)
+    route = respx.post("https://pcm/token").mock(
+        return_value=httpx.Response(200, json={"access_token": "tok-1", "expires_in": 60})
+    )
+
+    await pcm.get_token()
+
+    form = parse_qs(route.calls[0].request.content.decode())
+    assert form["scope"] == ["system/*.crus"]
+
+
+@respx.mock
 async def test_get_token_caches(es256_keypair) -> None:
     pcm = _make_client(es256_keypair)
     route = respx.post("https://pcm/token").mock(
@@ -58,6 +120,25 @@ async def test_get_token_pcm_unreachable_maps_to_pcm_001(es256_keypair) -> None:
 async def test_get_token_pcm_4xx_maps_to_pcm_002(es256_keypair) -> None:
     pcm = _make_client(es256_keypair)
     respx.post("https://pcm/token").mock(return_value=httpx.Response(401))
+
+    with pytest.raises(DSAdapterError) as exc_info:
+        await pcm.get_token()
+    assert exc_info.value.code == "PCM_002"
+
+
+@respx.mock
+async def test_get_token_200_non_json_gateway_error_maps_to_pcm_002(es256_keypair) -> None:
+    pcm = _make_client(es256_keypair)
+    respx.post("https://pcm/token").mock(
+        return_value=httpx.Response(
+            200,
+            text="Support ID: test-only",
+            headers={
+                "content-type": "text/html; charset=UTF-8",
+                "x-amzn-errortype": "ForbiddenException",
+            },
+        )
+    )
 
     with pytest.raises(DSAdapterError) as exc_info:
         await pcm.get_token()
