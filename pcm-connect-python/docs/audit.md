@@ -47,7 +47,9 @@ Each stdout line is one JSON document. Some Kubernetes logging agents wrap
 container output in a string field named `message`. Configure the collector to
 decode that JSON string into document fields when fields such as `event.id`,
 `event.outcome`, `trace.id`, and `pcm.authorization.decision` must be directly
-searchable. This collector step is independent of PCM Connect.
+searchable. This collector step is independent of PCM Connect. Elastic Agent
+operators can use the merge-safe pipeline, mapping, rollover, and verification
+procedure in [Collecting PCM audit events with Elastic](elastic-audit-ingest.md).
 
 The `json` and `cef` formats remain available for existing integrations. All
 enabled targets receive the same formatted event. Target settings are listed
