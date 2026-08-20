@@ -178,7 +178,12 @@ class KafkaTargetConfig(_Strict):
     topic: str = "ds-adapter-audit"
 
 
+class StdoutTargetConfig(_Strict):
+    enabled: bool = False
+
+
 class AuditTargetsConfig(_Strict):
+    stdout: StdoutTargetConfig = Field(default_factory=StdoutTargetConfig)
     syslog: SyslogTargetConfig = Field(default_factory=SyslogTargetConfig)
     file: FileTargetConfig = Field(default_factory=FileTargetConfig)
     kafka: KafkaTargetConfig = Field(default_factory=KafkaTargetConfig)
@@ -186,7 +191,7 @@ class AuditTargetsConfig(_Strict):
 
 class AuditConfig(_Strict):
     enabled: bool = True
-    format: Literal["json", "cef"] = "json"
+    format: Literal["json", "ecs", "cef"] = "json"
     include_response: bool = False
     targets: AuditTargetsConfig = Field(default_factory=AuditTargetsConfig)
 
@@ -204,6 +209,18 @@ class OTelConfig(_Strict):
     sample_rate: float = 1.0
 
 
+class InboundMTLSConfig(_Strict):
+    # AWS ALB mTLS headers are authoritative only when the backend is reachable
+    # exclusively through the trusted ALB/ingress path.
+    trust_aws_alb_headers: bool = False
+
+
+class ProxyHeadersConfig(_Strict):
+    # Number of secured proxy hops between the public client and this process.
+    # Zero is the safe default and ignores X-Forwarded-For.
+    trusted_hops: int = Field(default=0, ge=0, le=10)
+
+
 class VerificationConfig(_Strict):
     enabled: bool = True
     forbidden_labels: list[str] = Field(default_factory=list)
@@ -219,4 +236,6 @@ class AppConfig(_Strict):
     audit: AuditConfig = Field(default_factory=AuditConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
     otel: OTelConfig = Field(default_factory=OTelConfig)
+    inbound_mtls: InboundMTLSConfig = Field(default_factory=InboundMTLSConfig)
+    proxy_headers: ProxyHeadersConfig = Field(default_factory=ProxyHeadersConfig)
     verification: VerificationConfig = Field(default_factory=VerificationConfig)

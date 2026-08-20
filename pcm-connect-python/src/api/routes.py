@@ -166,6 +166,13 @@ async def fhir_proxy(
     metrics.PCM_INTROSPECT_DURATION.observe(time.perf_counter() - t0)
     warn_if_cnf_mismatch(introspection.cnf, peer_cert_der=None)
 
+    # Persist PCM context immediately so downstream failures still produce a
+    # useful audit event.
+    request.state.pcm_patient_id = introspection.patient
+    request.state.fhir_scope = introspection.scope
+    request.state.consent_id = introspection.consent_id
+    request.state.sp_organization_id = introspection.sp_organization_id
+
     if not introspection.patient:
         raise DSAdapterError("introspection missing patient", code="AUTH_002")
 
@@ -206,7 +213,8 @@ async def fhir_proxy(
     _STRIP_INBOUND = _HOP_BY_HOP | {"authorization", "x-correlation-id", "accept-encoding"}
     forward_headers: dict[str, str] = {}
     for k, v in request.headers.items():
-        if k.lower() in _STRIP_INBOUND:
+        lower_name = k.lower()
+        if lower_name in _STRIP_INBOUND or lower_name.startswith("x-amzn-mtls-"):
             continue
         forward_headers[k] = v
     forward_headers["Authorization"] = f"Bearer {internal_jwt}"
@@ -235,9 +243,6 @@ async def fhir_proxy(
 
     request.state.fhir_status = fhir_resp.status_code
     request.state.local_patient_id = local_patient_id
-    request.state.fhir_scope = introspection.scope
-    request.state.consent_id = introspection.consent_id
-    request.state.sp_organization_id = introspection.sp_organization_id
 
     if state.verifier is not None:
         state.verifier.verify(fhir_resp.body)

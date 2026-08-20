@@ -209,8 +209,9 @@ the internal transport URL into the JWT audience.
 | Env Variable | Required | Secret | Default | Description |
 |---|---|---|---|---|
 | `DS_ADAPTER_AUDIT_ENABLED` | No | No | `true` | Enable/disable audit logging |
-| `DS_ADAPTER_AUDIT_FORMAT` | No | No | `json` | Audit format: `json` or `cef` |
-| `DS_ADAPTER_AUDIT_INCLUDE_RESPONSE` | No | No | `false` | Include FHIR response body in audit |
+| `DS_ADAPTER_AUDIT_FORMAT` | No | No | `json` | Audit format: legacy `json`, Elastic-compatible `ecs`, or `cef` |
+| `DS_ADAPTER_AUDIT_INCLUDE_RESPONSE` | No | No | `false` | Deprecated compatibility setting; response bodies are never captured |
+| `DS_ADAPTER_AUDIT_TARGETS_STDOUT_ENABLED` | No | No | `false` | Emit one structured audit JSON document per stdout line for platform collection |
 | `DS_ADAPTER_AUDIT_TARGETS_SYSLOG_ENABLED` | No | No | `false` | Enable syslog audit target |
 | `DS_ADAPTER_AUDIT_TARGETS_SYSLOG_HOST` | No | No | `localhost` | Syslog server host |
 | `DS_ADAPTER_AUDIT_TARGETS_SYSLOG_PORT` | No | No | `514` | Syslog server port |
@@ -223,14 +224,43 @@ the internal transport URL into the JWT audience.
 | `DS_ADAPTER_AUDIT_TARGETS_KAFKA_BROKERS` | No | No | `kafka:9092` | Kafka broker addresses |
 | `DS_ADAPTER_AUDIT_TARGETS_KAFKA_TOPIC` | No | No | `ds-adapter-audit` | Kafka topic |
 
-### 4.9 Logging
+For Elastic collection in Kubernetes, set the format to `ecs`, enable the
+stdout target, and disable the file target. Response bodies are never captured,
+including when the compatibility setting
+`DS_ADAPTER_AUDIT_INCLUDE_RESPONSE=true` is present.
+
+### 4.9 Inbound mTLS
+
+| Env Variable | Required | Secret | Default | Description |
+|---|---|---|---|---|
+| `DS_ADAPTER_INBOUND_MTLS_TRUST_AWS_ALB_HEADERS` | No | No | `false` | Trust the default AWS ALB mTLS verify-mode certificate identity headers for trace and audit enrichment |
+
+Enable this only when the backend is isolated behind the trusted AWS ALB and
+ingress path. PCM Connect records subject/CN, issuer, serial number, and
+validity, but never records the forwarded leaf certificate or certificate
+chain. See `docs/specs/elastic-audit-logging.md` for the event contract.
+
+### 4.10 Trusted proxy headers
+
+| Env Variable | Required | Secret | Default | Description |
+|---|---|---|---|---|
+| `DS_ADAPTER_PROXY_HEADERS_TRUSTED_HOPS` | No | No | `0` | Number of secured proxies that append `X-Forwarded-For`; zero ignores the header |
+
+AWS ALB must use its default `append` processing mode. Set this to `1` when
+ALB is the only proxy seen by the application. Add one for each additional
+trusted proxy that appends its peer address (for example, an ingress gateway).
+PCM Connect selects from the right side of the chain so caller-supplied
+leftmost entries cannot override `source.ip`. It accepts AWS IPv4 and IPv6
+forms with or without the optional client port.
+
+### 4.11 Logging
 
 | Env Variable | Required | Secret | Default | Description |
 |---|---|---|---|---|
 | `DS_ADAPTER_LOGGING_LEVEL` | No | No | `info` | Log level: `debug`, `info`, `warning`, `error` |
 | `DS_ADAPTER_LOGGING_FORMAT` | No | No | `json` | Output format: `json` (ECS) or `text` |
 
-### 4.10 OpenTelemetry
+### 4.12 OpenTelemetry
 
 | Env Variable | Required | Secret | Default | Description |
 |---|---|---|---|---|

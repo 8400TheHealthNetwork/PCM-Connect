@@ -80,6 +80,8 @@ audit:
   format: "json"
   include_response: false
   targets:
+    stdout:
+      enabled: false
     syslog:
       enabled: false
       host: "localhost"
@@ -105,6 +107,16 @@ otel:
   endpoint: "http://otel-collector:4317"
   service_name: "ds-adapter"
   sample_rate: 1.0
+
+# Trust identity headers produced by an AWS ALB in mTLS verify mode only when
+# the application cannot be reached except through that trusted ingress path.
+inbound_mtls:
+  trust_aws_alb_headers: false
+
+# Number of trusted proxies that append X-Forwarded-For between the caller and
+# the application. Keep zero unless the network path is controlled end to end.
+proxy_headers:
+  trusted_hops: 0
 
 verification:
   enabled: true

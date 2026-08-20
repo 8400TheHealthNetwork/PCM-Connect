@@ -50,6 +50,9 @@ def test_load_yaml_returns_appconfig(tmp_path: Path) -> None:
     assert cfg.server.port == 8000
     assert cfg.jwt.algorithm == "ES256"
     assert cfg.audit.targets.file.enabled is True
+    assert cfg.audit.targets.stdout.enabled is False
+    assert cfg.inbound_mtls.trust_aws_alb_headers is False
+    assert cfg.proxy_headers.trusted_hops == 0
     assert cfg.pcm.token_scope == "system/*.crus"
 
 
@@ -88,10 +91,18 @@ def test_env_override_section_with_underscore(tmp_path: Path) -> None:
 
 
 def test_env_override_nested(tmp_path: Path) -> None:
-    env = {"DS_ADAPTER_AUDIT_TARGETS_FILE_PATH": "/tmp/audit.log"}
+    env = {
+        "DS_ADAPTER_AUDIT_TARGETS_FILE_PATH": "/tmp/audit.log",
+        "DS_ADAPTER_AUDIT_TARGETS_STDOUT_ENABLED": "true",
+        "DS_ADAPTER_INBOUND_MTLS_TRUST_AWS_ALB_HEADERS": "true",
+        "DS_ADAPTER_PROXY_HEADERS_TRUSTED_HOPS": "2",
+    }
     cfg = load_config(_write(tmp_path, MINIMAL_YAML), env=env)
 
     assert cfg.audit.targets.file.path == "/tmp/audit.log"
+    assert cfg.audit.targets.stdout.enabled is True
+    assert cfg.inbound_mtls.trust_aws_alb_headers is True
+    assert cfg.proxy_headers.trusted_hops == 2
 
 
 def test_missing_required_field_raises(tmp_path: Path) -> None:

@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 import json
+import logging
+from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
 
 import pytest
 
 from src.audit.formatters.cef_fmt import format_cef
+from src.audit.formatters.ecs_fmt import format_ecs
 from src.audit.formatters.json_fmt import format_json
 from src.audit.service import AuditRecord, AuditService, _mask_patient_id
 from src.audit.targets.file import FileTarget
@@ -14,6 +17,7 @@ from src.config.models import (
     AuditTargetsConfig,
     FileTargetConfig,
     KafkaTargetConfig,
+    StdoutTargetConfig,
     SyslogTargetConfig,
 )
 
@@ -62,6 +66,25 @@ def test_format_json_includes_required_fields() -> None:
         assert key in payload
 
 
+def test_format_ecs_includes_required_fields() -> None:
+    rec = _record(patient_id="****0018")
+    payload = json.loads(format_ecs(rec))
+    assert payload["@timestamp"] == rec.timestamp
+    assert payload["service"]["name"] == "ds-adapter"
+    assert payload["log"]["logger"] == "audit"
+    assert payload["event"]["action"] == "fhir_access"
+    assert payload["event"]["dataset"] == "pcm-connect.audit"
+    assert payload["event"]["outcome"] == "success"
+    assert payload["event"]["duration"] == 12_340_000
+    assert payload["labels"]["correlation_id"] == "cid-1"
+    assert payload["source"]["ip"] == "10.0.0.1"
+    assert payload["http"]["request"]["method"] == "GET"
+    assert payload["http"]["response"]["status_code"] == 200
+    assert payload["url"]["path"] == "/fhir/Observation"
+    assert payload["pcm"]["patient_id"] == "****0018"
+    assert payload["pcm"]["consent_id"] == "consent-1"
+
+
 def test_format_cef_starts_with_header() -> None:
     rec = _record()
     out = format_cef(rec)
@@ -77,6 +100,34 @@ async def test_file_target_writes_record(tmp_path: Path) -> None:
     await target.aclose()
     contents = target_path.read_text()
     assert '"hello": "world"' in contents
+
+
+async def test_file_target_rotation_none_uses_plain_file_handler(tmp_path: Path) -> None:
+    target = FileTarget(
+        FileTargetConfig(enabled=True, path=str(tmp_path / "audit.log"), rotation="none")
+    )
+    await target.start()
+    assert isinstance(target._handler, logging.FileHandler)  # type: ignore[attr-defined]
+    assert not isinstance(target._handler, TimedRotatingFileHandler)  # type: ignore[attr-defined]
+    await target.aclose()
+
+
+async def test_stdout_target_emits_one_json_message(caplog) -> None:
+    config = AuditConfig(
+        enabled=True,
+        format="ecs",
+        targets=AuditTargetsConfig(
+            stdout=StdoutTargetConfig(enabled=True),
+            file=FileTargetConfig(enabled=False),
+        ),
+    )
+    service = AuditService.from_config(config)
+    with caplog.at_level(logging.INFO, logger="audit"):
+        await service.record(_record())
+
+    messages = [record.message for record in caplog.records if record.name == "audit"]
+    assert len(messages) == 1
+    assert json.loads(messages[0])["event"]["action"] == "fhir_access"
 
 
 async def test_audit_service_masks_and_writes(tmp_path: Path) -> None:

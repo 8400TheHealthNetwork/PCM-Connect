@@ -6,12 +6,15 @@ from typing import Any
 import structlog
 
 from src.audit.formatters.cef_fmt import format_cef
+from src.audit.formatters.ecs_fmt import format_ecs
 from src.audit.formatters.json_fmt import format_json
 from src.audit.targets.base import AuditTarget
 from src.audit.targets.file import FileTarget
 from src.audit.targets.kafka import KafkaTarget
+from src.audit.targets.stdout import StdoutTarget
 from src.audit.targets.syslog import SyslogTarget
 from src.config.models import AuditConfig
+from src.observability.client_certificate import ClientCertificateMetadata
 
 log = structlog.get_logger()
 
@@ -29,6 +32,11 @@ class AuditRecord:
     consent_id: str | None
     response_status: int | None
     response_time_ms: float | None
+    service_name: str = "ds-adapter"
+    trace_id: str | None = None
+    transaction_id: str | None = None
+    event_outcome: str = "success"
+    client_certificate: ClientCertificateMetadata | None = None
     error: str | None = None
     severity: str = "info"
     extras: dict[str, Any] = field(default_factory=dict)
@@ -52,6 +60,8 @@ class AuditService:
     def from_config(cls, config: AuditConfig) -> "AuditService":
         targets: list[AuditTarget] = []
         if config.enabled:
+            if config.targets.stdout.enabled:
+                targets.append(StdoutTarget())
             if config.targets.file.enabled:
                 targets.append(FileTarget(config.targets.file))
             if config.targets.syslog.enabled:
@@ -78,7 +88,12 @@ class AuditService:
         if not self._enabled or not self._targets:
             return
         rec.patient_id = _mask_patient_id(rec.patient_id)
-        payload = format_cef(rec) if self._formatter == "cef" else format_json(rec)
+        if self._formatter == "cef":
+            payload = format_cef(rec)
+        elif self._formatter == "ecs":
+            payload = format_ecs(rec)
+        else:
+            payload = format_json(rec)
         for t in self._targets:
             try:
                 await t.send(payload)

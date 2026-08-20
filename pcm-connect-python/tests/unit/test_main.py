@@ -14,9 +14,19 @@ from opentelemetry.sdk.trace import ReadableSpan, TracerProvider
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
 from opentelemetry.trace import SpanKind
 
+from src.audit.service import AuditRecord
 from src.config import AppConfig
 from src.config.models import OTelConfig
+from src.middleware.audit_middleware import AuditMiddleware
 from src.observability.setup import init_otel
+
+
+class _CaptureAuditService:
+    def __init__(self) -> None:
+        self.records: list[AuditRecord] = []
+
+    async def record(self, record: AuditRecord) -> None:
+        self.records.append(record)
 
 
 def _config() -> AppConfig:
@@ -58,8 +68,15 @@ def test_create_app_initializes_otel_before_lifespan() -> None:
 def test_fastapi_request_is_parent_of_instrumented_httpx_call() -> None:
     exporter = InMemorySpanExporter()
     app = FastAPI()
+    config = _config()
+    config.inbound_mtls.trust_aws_alb_headers = True
+    config.proxy_headers.trusted_hops = 1
+    app.state.config = config
+    audit_service = _CaptureAuditService()
+    app.state.audit_service = audit_service
+    app.add_middleware(AuditMiddleware)
 
-    @app.get("/trace-test")
+    @app.get("/fhir/trace-test")
     async def trace_test() -> dict[str, bool]:
         async with httpx.AsyncClient() as client:
             await client.post("http://downstream.test/step")
@@ -80,7 +97,15 @@ def test_fastapi_request_is_parent_of_instrumented_httpx_call() -> None:
             router.post("http://downstream.test/step").mock(
                 return_value=httpx.Response(200, json={"ok": True})
             )
-            response = TestClient(app).get("/trace-test")
+            response = TestClient(app).get(
+                "/fhir/trace-test",
+                headers={
+                    "X-Forwarded-For": "192.0.2.250, 198.51.100.20",
+                    "X-Amzn-Mtls-Clientcert-Subject": "CN=org-123,O=Hospital,C=IL",
+                    "X-Amzn-Mtls-Clientcert-Issuer": "CN=MOH Client CA,O=MOH,C=IL",
+                    "X-Amzn-Mtls-Clientcert-Serial-Number": "A1B2",
+                },
+            )
         assert response.status_code == 200
 
         provider = trace.get_tracer_provider()
@@ -95,6 +120,13 @@ def test_fastapi_request_is_parent_of_instrumented_httpx_call() -> None:
         assert client_span.parent is not None
         assert client_span.context.trace_id == server_span.context.trace_id
         assert client_span.parent.span_id == server_span.context.span_id
+        assert server_span.attributes["client.address"] == "198.51.100.20"
+        assert server_span.attributes["tls.client.subject"] == "CN=org-123,O=Hospital,C=IL"
+        assert server_span.attributes["tls.client.x509.subject.common_name"] == ("org-123",)
+        assert server_span.attributes["tls.client.x509.serial_number"] == "A1B2"
+        assert len(audit_service.records) == 1
+        assert audit_service.records[0].trace_id == f"{server_span.context.trace_id:032x}"
+        assert audit_service.records[0].transaction_id == f"{server_span.context.span_id:016x}"
     finally:
         HTTPXClientInstrumentor().uninstrument()
         FastAPIInstrumentor.uninstrument_app(app)

@@ -15,6 +15,7 @@ log = structlog.get_logger()
 
 
 def _response_for_code(request: Request, code: str, *, log_level: int = logging.WARNING) -> JSONResponse:
+    request.state.error_code = code
     spec = ERROR_CATALOG.get(code) or ERROR_CATALOG["GEN_001"]
     body = build_operation_outcome(code)
     headers = {}
