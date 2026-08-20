@@ -53,6 +53,9 @@ For organization onboarding, PCM registration values, the exact token and
 introspection requests, required secret material, and staged troubleshooting,
 see the [PCM integration guide](docs/pcm-integration.md).
 
+For audit event fields, privacy guarantees, output targets, collector setup,
+and trusted-ingress configuration, see the [audit logging guide](docs/audit.md).
+
 ## Endpoints
 
 | Path | Method | Purpose |

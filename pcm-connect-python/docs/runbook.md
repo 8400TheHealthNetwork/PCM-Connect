@@ -224,10 +224,12 @@ the internal transport URL into the JWT audience.
 | `DS_ADAPTER_AUDIT_TARGETS_KAFKA_BROKERS` | No | No | `kafka:9092` | Kafka broker addresses |
 | `DS_ADAPTER_AUDIT_TARGETS_KAFKA_TOPIC` | No | No | `ds-adapter-audit` | Kafka topic |
 
-For Elastic collection in Kubernetes, set the format to `ecs`, enable the
-stdout target, and disable the file target. Response bodies are never captured,
-including when the compatibility setting
-`DS_ADAPTER_AUDIT_INCLUDE_RESPONSE=true` is present.
+For structured collection on a container platform, set the format to `ecs`,
+enable the stdout target, and disable the file target. Response bodies are
+never captured, including when the compatibility setting
+`DS_ADAPTER_AUDIT_INCLUDE_RESPONSE=true` is present. See the
+[audit logging guide](audit.md) for the event fields, privacy guarantees,
+collector behavior, and verification steps.
 
 ### 4.9 Inbound mTLS
 
@@ -238,7 +240,8 @@ including when the compatibility setting
 Enable this only when the backend is isolated behind the trusted AWS ALB and
 ingress path. PCM Connect records subject/CN, issuer, serial number, and
 validity, but never records the forwarded leaf certificate or certificate
-chain. See `docs/specs/elastic-audit-logging.md` for the event contract.
+chain. The [audit logging guide](audit.md) describes the trust boundary and
+event contract.
 
 ### 4.10 Trusted proxy headers
 
@@ -270,7 +273,7 @@ forms with or without the optional client port.
 | `DS_ADAPTER_OTEL_SERVICE_NAME` | No | No | `ds-adapter` | Service name in traces |
 | `DS_ADAPTER_OTEL_SAMPLE_RATE` | No | No | `1.0` | Sampling rate (0.0–1.0) |
 
-### 4.11 Verification
+### 4.13 Verification
 
 | Env Variable | Required | Secret | Default | Description |
 |---|---|---|---|---|
