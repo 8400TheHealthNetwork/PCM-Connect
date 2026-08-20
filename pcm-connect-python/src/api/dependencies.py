@@ -16,4 +16,6 @@ def get_bearer_token(request: Request) -> str:
     parts = header.split(None, 1)
     if len(parts) != 2 or parts[0].lower() != "bearer" or not parts[1].strip():
         raise DSAdapterError("malformed Authorization header", code="AUTH_001")
+    request.state.authorization_stage = "pcm_introspection"
+    request.state.audit_stage = "pcm_introspection"
     return parts[1].strip()

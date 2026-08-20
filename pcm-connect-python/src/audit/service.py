@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Any
+from uuid import uuid4
 
 import structlog
 
@@ -18,6 +19,8 @@ from src.observability.client_certificate import ClientCertificateMetadata
 
 log = structlog.get_logger()
 
+AUDIT_SCHEMA_VERSION = "1.0.0"
+
 
 @dataclass
 class AuditRecord:
@@ -32,6 +35,15 @@ class AuditRecord:
     consent_id: str | None
     response_status: int | None
     response_time_ms: float | None
+    event_id: str = field(default_factory=lambda: str(uuid4()))
+    audit_schema_version: str = AUDIT_SCHEMA_VERSION
+    fhir_resource_type: str | None = None
+    fhir_interaction: str = "access"
+    baskets: tuple[str, ...] = ()
+    access_type: str | None = None
+    authorization_decision: str = "indeterminate"
+    authorization_stage: str = "bearer_validation"
+    processing_stage: str = "bearer_validation"
     service_name: str = "ds-adapter"
     trace_id: str | None = None
     transaction_id: str | None = None

@@ -76,9 +76,13 @@ DS_ADAPTER_PROXY_HEADERS_TRUSTED_HOPS=1
 `audit.include_response` is retained for configuration compatibility but does
 not cause response bodies to be captured.
 
-The existing `json` and `cef` event contracts remain unchanged. ECS output is
-an explicit `ecs` format so enabling Elastic delivery does not break existing
-file, syslog, or Kafka consumers.
+The existing `json` and `cef` formats remain compatible. ECS output is an
+explicit `ecs` format so enabling structured delivery does not change the
+selected format for file, syslog, or Kafka consumers.
+
+The additive event identity, FHIR classification, authorization decision, PCM
+access context, and processing-stage contract is defined in
+[the audit event enrichment specification](audit-event-enrichment.md).
 
 ## Acceptance criteria
 

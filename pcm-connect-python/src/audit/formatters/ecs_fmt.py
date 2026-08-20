@@ -6,13 +6,16 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.audit.service import AuditRecord
 
+ECS_VERSION = "8.0.0"
+
 
 def format_ecs(rec: "AuditRecord") -> str:
     event: dict[str, object] = {
+        "id": rec.event_id,
         "kind": "event",
         "category": ["web"],
         "type": ["access"],
-        "action": "fhir_access",
+        "action": f"fhir_{rec.fhir_interaction}",
         "dataset": "pcm-connect.audit",
         "outcome": rec.event_outcome,
     }
@@ -22,6 +25,7 @@ def format_ecs(rec: "AuditRecord") -> str:
     body: dict[str, object] = {
         "@timestamp": rec.timestamp,
         "message": "FHIR access audit",
+        "ecs": {"version": ECS_VERSION},
         "service": {"name": rec.service_name},
         "log": {"logger": "audit", "level": rec.severity},
         "event": event,
@@ -33,8 +37,22 @@ def format_ecs(rec: "AuditRecord") -> str:
         },
         "url": {"path": rec.path},
         "pcm": {
+            "audit": {
+                "schema_version": rec.audit_schema_version,
+                "processing_stage": rec.processing_stage,
+            },
+            "fhir": {
+                "resource_type": rec.fhir_resource_type,
+                "interaction": rec.fhir_interaction,
+            },
+            "authorization": {
+                "decision": rec.authorization_decision,
+                "stage": rec.authorization_stage,
+            },
             "patient_id": rec.patient_id,
             "scope": rec.fhir_scope,
+            "baskets": list(rec.baskets),
+            "access_type": rec.access_type,
             "sp_organization_id": rec.sp_organization_id,
             "consent_id": rec.consent_id,
         },

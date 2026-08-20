@@ -9,6 +9,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 from starlette.types import ASGIApp
 
+from src.audit.fhir_context import classify_fhir_request
 from src.audit.service import AuditRecord, AuditService
 from src.observability.client_certificate import ClientCertificateMetadata, from_aws_alb_headers
 from src.observability.client_ip import resolve_client_ip
@@ -26,6 +27,10 @@ class AuditMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
 
         started = time.perf_counter()
+        request.state.audit_stage = "bearer_validation"
+        request.state.authorization_decision = "indeterminate"
+        request.state.authorization_stage = "bearer_validation"
+        fhir_context = classify_fhir_request(request.method, request.url.path)
         client_certificate: ClientCertificateMetadata | None = None
         config = request.app.state.config
         peer_ip = request.client.host if request.client else ""
@@ -54,6 +59,11 @@ class AuditMiddleware(BaseHTTPMiddleware):
             response_status = getattr(response, "status_code", None) if response else None
             error_code = getattr(request.state, "error_code", None) or error_code
             failed = response_status is None or response_status >= 400
+            authorization_decision = getattr(
+                request.state, "authorization_decision", "indeterminate"
+            )
+            if (error_code or "").startswith("AUTH_"):
+                authorization_decision = "denied"
             audit_service: AuditService | None = getattr(request.app.state, "audit_service", None)
             if audit_service is not None:
                 span_context = trace.get_current_span().get_span_context()
@@ -64,7 +74,7 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     correlation_id=getattr(request.state, "correlation_id", ""),
                     source_ip=source_ip,
                     method=request.method,
-                    path=request.url.path,
+                    path=fhir_context.audit_path,
                     fhir_scope=getattr(request.state, "fhir_scope", None),
                     patient_id=(
                         getattr(request.state, "local_patient_id", None)
@@ -74,6 +84,17 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     consent_id=getattr(request.state, "consent_id", None),
                     response_status=response_status,
                     response_time_ms=(time.perf_counter() - started) * 1000.0,
+                    fhir_resource_type=fhir_context.resource_type,
+                    fhir_interaction=fhir_context.interaction,
+                    baskets=getattr(request.state, "baskets", ()),
+                    access_type=getattr(request.state, "access_type", None),
+                    authorization_decision=authorization_decision,
+                    authorization_stage=getattr(
+                        request.state, "authorization_stage", "bearer_validation"
+                    ),
+                    processing_stage=getattr(
+                        request.state, "audit_stage", "bearer_validation"
+                    ),
                     service_name=config.otel.service_name,
                     trace_id=trace_id,
                     transaction_id=transaction_id,

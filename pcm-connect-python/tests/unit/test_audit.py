@@ -4,6 +4,7 @@ import json
 import logging
 from logging.handlers import TimedRotatingFileHandler
 from pathlib import Path
+from uuid import UUID
 
 import pytest
 
@@ -35,6 +36,13 @@ def _record(**overrides) -> AuditRecord:
         consent_id="consent-1",
         response_status=200,
         response_time_ms=12.34,
+        fhir_resource_type="Observation",
+        fhir_interaction="search",
+        baskets=("basket-a", "basket-b"),
+        access_type="treatment",
+        authorization_decision="allowed",
+        authorization_stage="authorized",
+        processing_stage="completed",
     )
     base.update(overrides)
     return AuditRecord(**base)
@@ -62,8 +70,19 @@ def test_format_json_includes_required_fields() -> None:
         "consent_id",
         "response_status",
         "response_time_ms",
+        "event_id",
+        "audit_schema_version",
+        "fhir_resource_type",
+        "fhir_interaction",
+        "baskets",
+        "access_type",
+        "authorization_decision",
+        "authorization_stage",
+        "processing_stage",
     ):
         assert key in payload
+    assert UUID(payload["event_id"])
+    assert payload["audit_schema_version"] == "1.0.0"
 
 
 def test_format_ecs_includes_required_fields() -> None:
@@ -72,23 +91,48 @@ def test_format_ecs_includes_required_fields() -> None:
     assert payload["@timestamp"] == rec.timestamp
     assert payload["service"]["name"] == "ds-adapter"
     assert payload["log"]["logger"] == "audit"
-    assert payload["event"]["action"] == "fhir_access"
+    assert UUID(payload["event"]["id"])
+    assert payload["event"]["action"] == "fhir_search"
     assert payload["event"]["dataset"] == "pcm-connect.audit"
     assert payload["event"]["outcome"] == "success"
     assert payload["event"]["duration"] == 12_340_000
+    assert payload["ecs"]["version"] == "8.0.0"
     assert payload["labels"]["correlation_id"] == "cid-1"
     assert payload["source"]["ip"] == "10.0.0.1"
     assert payload["http"]["request"]["method"] == "GET"
     assert payload["http"]["response"]["status_code"] == 200
     assert payload["url"]["path"] == "/fhir/Observation"
+    assert payload["pcm"]["fhir"]["resource_type"] == "Observation"
+    assert payload["pcm"]["fhir"]["interaction"] == "search"
+    assert payload["pcm"]["audit"]["schema_version"] == "1.0.0"
+    assert payload["pcm"]["audit"]["processing_stage"] == "completed"
+    assert payload["pcm"]["authorization"] == {
+        "decision": "allowed",
+        "stage": "authorized",
+    }
     assert payload["pcm"]["patient_id"] == "****0018"
     assert payload["pcm"]["consent_id"] == "consent-1"
+    assert payload["pcm"]["baskets"] == ["basket-a", "basket-b"]
+    assert payload["pcm"]["access_type"] == "treatment"
+
+
+def test_audit_records_receive_unique_event_ids() -> None:
+    first = _record()
+    second = _record()
+
+    assert first.event_id != second.event_id
+    assert UUID(first.event_id)
+    assert UUID(second.event_id)
 
 
 def test_format_cef_starts_with_header() -> None:
     rec = _record()
     out = format_cef(rec)
-    assert out.startswith("CEF:0|ds-adapter|DSAdapter|")
+    assert out.startswith("CEF:0|ds-adapter|DSAdapter|1.0.0|")
+    assert f"externalId={rec.event_id}" in out
+    assert "act=fhir_search" in out
+    assert "flexString1=allowed" in out
+    assert "cat=completed" in out
     assert "cs1Label=correlation_id" in out
 
 
@@ -127,7 +171,7 @@ async def test_stdout_target_emits_one_json_message(caplog) -> None:
 
     messages = [record.message for record in caplog.records if record.name == "audit"]
     assert len(messages) == 1
-    assert json.loads(messages[0])["event"]["action"] == "fhir_access"
+    assert json.loads(messages[0])["event"]["action"] == "fhir_search"
 
 
 async def test_audit_service_masks_and_writes(tmp_path: Path) -> None:

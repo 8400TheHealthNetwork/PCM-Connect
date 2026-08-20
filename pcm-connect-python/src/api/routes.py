@@ -172,15 +172,23 @@ async def fhir_proxy(
     request.state.fhir_scope = introspection.scope
     request.state.consent_id = introspection.consent_id
     request.state.sp_organization_id = introspection.sp_organization_id
+    request.state.baskets = tuple(introspection.baskets or ())
+    request.state.access_type = introspection.access_type
 
     if not introspection.patient:
         raise DSAdapterError("introspection missing patient", code="AUTH_002")
+
+    request.state.authorization_decision = "allowed"
+    request.state.authorization_stage = "authorized"
+    request.state.audit_stage = "identity_resolution"
 
     t0 = time.perf_counter()
     local_patient_id = await state.id_replacement_client.resolve_patient_id(
         introspection.patient
     )
     metrics.ID_REPLACEMENT_DURATION.observe(time.perf_counter() - t0)
+    request.state.local_patient_id = local_patient_id
+    request.state.audit_stage = "jwt_minting"
 
     signing_key_raw = os.environ.get("DS_ADAPTER_JWT_SIGNING_KEY", "")
     if not signing_key_raw:
@@ -231,6 +239,7 @@ async def fhir_proxy(
     )
 
     body = await request.body()
+    request.state.audit_stage = "fhir_forward"
     t0 = time.perf_counter()
     fhir_resp = await state.fhir_client.forward(
         method=request.method,
@@ -242,10 +251,12 @@ async def fhir_proxy(
     metrics.FHIR_FORWARD_DURATION.observe(time.perf_counter() - t0)
 
     request.state.fhir_status = fhir_resp.status_code
-    request.state.local_patient_id = local_patient_id
+    request.state.audit_stage = "response_verification"
 
     if state.verifier is not None:
         state.verifier.verify(fhir_resp.body)
+
+    request.state.audit_stage = "completed"
 
     out_headers = _filter_response_headers(fhir_resp.headers)
     out_headers.setdefault("Content-Type", "application/fhir+json")

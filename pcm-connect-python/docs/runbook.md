@@ -228,8 +228,8 @@ For structured collection on a container platform, set the format to `ecs`,
 enable the stdout target, and disable the file target. Response bodies are
 never captured, including when the compatibility setting
 `DS_ADAPTER_AUDIT_INCLUDE_RESPONSE=true` is present. See the
-[audit logging guide](audit.md) for the event fields, privacy guarantees,
-collector behavior, and verification steps.
+[audit logging guide](audit.md) for the event fields, authorization semantics,
+privacy guarantees, collector behavior, and verification steps.
 
 ### 4.9 Inbound mTLS
 

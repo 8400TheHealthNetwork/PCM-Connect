@@ -244,7 +244,7 @@ Configuration is loaded from a YAML file (`config.yaml`) and can be overridden w
 | `id_replacement` | ID Replacement service (FHIR_ID_Resolve) URL, endpoint, retries |
 | `jwt` | Signing algorithm, issuer, audience, expiry |
 | `metadata` | Discovery endpoint configuration (JWKS URI, scopes, capabilities) |
-| `audit` | Audit logging targets (syslog, file, Kafka) and format |
+| `audit` | Audit logging targets (stdout, syslog, file, Kafka) and format |
 | `logging` | Log level and format |
 | `otel` | OpenTelemetry tracing configuration |
 | `verification` | Response verification (forbidden labels) |
@@ -260,10 +260,14 @@ The adapter instruments all requests with OpenTelemetry. Trace context is propag
 ### Audit Logging
 
 Every FHIR proxy request is audit-logged with:
-- Correlation ID
-- Patient ID
-- Scope and consent
-- FHIR response status
-- Timestamp
 
-Audit logs can be emitted to file, syslog, or Kafka in JSON or CEF format.
+- unique event, correlation, and OpenTelemetry trace identifiers;
+- masked patient and FHIR path identifiers;
+- FHIR resource type, interaction, response status, and processing stage;
+- PCM scope, consent, baskets, access type, organization, and authorization
+  decision; and
+- optional source IP and trusted client-certificate identity metadata.
+
+Audit logs can be emitted to stdout, file, syslog, or Kafka in legacy JSON,
+ECS-compatible JSON, or CEF format. See the [audit logging guide](audit.md) for
+the complete event contract, privacy rules, and deployment guidance.

@@ -46,9 +46,71 @@ def test_handled_auth_failure_has_error_outcome_and_duration(app, client) -> Non
     assert len(target.payloads) == 1
     event = json.loads(target.payloads[0])
     assert event["event"]["outcome"] == "failure"
+    assert event["event"]["action"] == "fhir_search"
+    assert event["pcm"]["audit"]["processing_stage"] == "bearer_validation"
     assert event["event"]["duration"] > 0
     assert event["error"]["code"] == "AUTH_001"
     assert event["labels"]["correlation_id"] == "cid-auth"
+    assert event["pcm"]["authorization"] == {
+        "decision": "denied",
+        "stage": "bearer_validation",
+    }
+
+
+@respx.mock
+def test_pcm_client_auth_failure_is_indeterminate(app, client) -> None:
+    target = _capture_audit(app)
+    respx.post("http://pcm.test/token").mock(return_value=httpx.Response(401))
+
+    response = client.get(
+        "/fhir/Observation",
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 401
+    event = json.loads(target.payloads[0])
+    assert event["error"]["code"] == "PCM_002"
+    assert event["pcm"]["audit"]["processing_stage"] == "pcm_introspection"
+    assert event["pcm"]["authorization"] == {
+        "decision": "indeterminate",
+        "stage": "pcm_introspection",
+    }
+
+
+@respx.mock
+def test_inactive_token_is_denied_during_introspection(app, client) -> None:
+    target = _capture_audit(app)
+    _wire_pcm({"active": False})
+
+    response = client.get(
+        "/fhir/Observation",
+        headers={"Authorization": "Bearer inactive"},
+    )
+
+    assert response.status_code == 401
+    event = json.loads(target.payloads[0])
+    assert event["error"]["code"] == "AUTH_002"
+    assert event["pcm"]["audit"]["processing_stage"] == "pcm_introspection"
+    assert event["pcm"]["authorization"] == {
+        "decision": "denied",
+        "stage": "pcm_introspection",
+    }
+
+
+@respx.mock
+def test_expired_token_is_denied_during_introspection(app, client) -> None:
+    target = _capture_audit(app)
+    _wire_pcm({"active": False, "exp": 0})
+
+    response = client.get(
+        "/fhir/Observation",
+        headers={"Authorization": "Bearer expired"},
+    )
+
+    assert response.status_code == 401
+    event = json.loads(target.payloads[0])
+    assert event["error"]["code"] == "AUTH_003"
+    assert event["pcm"]["authorization"]["decision"] == "denied"
 
 
 @respx.mock
@@ -83,11 +145,78 @@ def test_downstream_failure_retains_pcm_and_trusted_client_certificate(
     assert event["pcm"]["consent_id"] == sample_introspection_response["consent_id"]
     assert event["pcm"]["sp_organization_id"] == "org-hospital-a"
     assert event["pcm"]["patient_id"] == "*****0018"
+    assert event["pcm"]["baskets"] == ["basket-a"]
+    assert event["pcm"]["access_type"] == "treatment"
+    assert event["pcm"]["authorization"] == {
+        "decision": "allowed",
+        "stage": "authorized",
+    }
+    assert event["pcm"]["audit"]["processing_stage"] == "identity_resolution"
     assert event["source"]["ip"] == "198.51.100.20"
     assert event["tls"]["client"]["subject"].startswith("CN=org-123")
     assert event["tls"]["client"]["x509"]["subject"]["common_name"] == ["org-123"]
     assert event["tls"]["client"]["x509"]["serial_number"] == "03A5B1"
     assert "SECRET" not in target.payloads[0]
+
+
+@respx.mock
+def test_success_has_fhir_context_pcm_authorization_and_completed_stage(
+    app, client, sample_introspection_response, sample_fhir_bundle
+) -> None:
+    target = _capture_audit(app)
+    _wire_pcm(sample_introspection_response)
+    respx.post("http://id.test/api/v1/resolve").mock(
+        return_value=httpx.Response(200, json={"patient_id": "P-42"})
+    )
+    respx.get("http://fhir.test/Observation").mock(
+        return_value=httpx.Response(200, json=sample_fhir_bundle)
+    )
+
+    response = client.get(
+        "/fhir/Observation",
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 200
+    event = json.loads(target.payloads[0])
+    assert event["event"]["action"] == "fhir_search"
+    assert event["pcm"]["audit"]["processing_stage"] == "completed"
+    assert event["pcm"]["fhir"] == {
+        "resource_type": "Observation",
+        "interaction": "search",
+    }
+    assert event["pcm"]["audit"]["schema_version"] == "1.0.0"
+    assert event["pcm"]["authorization"] == {
+        "decision": "allowed",
+        "stage": "authorized",
+    }
+    assert event["pcm"]["baskets"] == ["basket-a"]
+    assert event["pcm"]["access_type"] == "treatment"
+
+
+@respx.mock
+def test_downstream_denial_does_not_rewrite_pcm_authorization_decision(
+    app, client, sample_introspection_response
+) -> None:
+    target = _capture_audit(app)
+    _wire_pcm(sample_introspection_response)
+    respx.post("http://id.test/api/v1/resolve").mock(
+        return_value=httpx.Response(200, json={"patient_id": "P-42"})
+    )
+    respx.get("http://fhir.test/Observation").mock(
+        return_value=httpx.Response(403, json={"resourceType": "OperationOutcome"})
+    )
+
+    response = client.get(
+        "/fhir/Observation",
+        headers={"Authorization": "Bearer opaque"},
+    )
+
+    assert response.status_code == 403
+    event = json.loads(target.payloads[0])
+    assert event["event"]["outcome"] == "failure"
+    assert event["pcm"]["authorization"]["decision"] == "allowed"
+    assert event["pcm"]["audit"]["processing_stage"] == "completed"
 
 
 @respx.mock
