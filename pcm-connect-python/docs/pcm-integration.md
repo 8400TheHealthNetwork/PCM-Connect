@@ -224,8 +224,11 @@ The public gateway may require an additional client certificate. That is a
 gateway requirement and is separate from the adapter-to-PCM mTLS connection.
 
 The patient returned by PCM introspection must exist in the organization's ID
-replacement service. A valid PCM token can therefore pass authentication but
-still return `ID_002 Patient not found` until the local mapping is populated.
+replacement service. When PCM returns `system|value`, the adapter preserves
+both parts in the resolver request; a legacy bare value uses the Israeli
+national-ID system. A valid PCM token can therefore pass authentication but
+still return `ID_002 Patient not found` until the matching system/value exists
+in the local FHIR server.
 
 ## 7. Verification sequence
 

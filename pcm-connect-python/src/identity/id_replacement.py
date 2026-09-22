@@ -14,6 +14,19 @@ log = structlog.get_logger()
 NATIONAL_ID_SYSTEM = "http://fhir.health.gov.il/identifier/il-national-id"
 
 
+def _parse_patient_identifier(patient_identifier: str) -> tuple[str, str]:
+    """Return the FHIR identifier system/value carried by PCM.
+
+    PCM may return a fully qualified ``system|value`` patient claim. Older
+    integrations return only the identifier value, which remains compatible
+    with the Israeli national-ID system default.
+    """
+    system, separator, value = patient_identifier.partition("|")
+    if separator and system and value:
+        return system, value
+    return NATIONAL_ID_SYSTEM, patient_identifier
+
+
 class IDReplacementClient:
     def __init__(self, *, http: httpx.AsyncClient, config: IDReplacementConfig) -> None:
         self._http = http
@@ -23,22 +36,20 @@ class IDReplacementClient:
     def url(self) -> str:
         return self._config.base_url.rstrip("/") + self._config.endpoint
 
-    async def resolve_patient_id(self, national_id: str) -> str:
+    async def resolve_patient_id(self, patient_identifier: str) -> str:
         headers = {"Content-Type": "application/json"}
         auth = os.environ.get("DS_ADAPTER_ID_REPLACEMENT_AUTH")
         if auth:
             headers["Authorization"] = auth
 
-        # If the value already contains the system prefix (system|value format from PCM),
-        # strip it so we only send the bare identifier to FHIR_ID_Resolve.
-        prefix = NATIONAL_ID_SYSTEM + "|"
-        if national_id.startswith(prefix):
-            national_id = national_id[len(prefix):]
+        identifier_system, identifier_value = _parse_patient_identifier(
+            patient_identifier
+        )
 
         body = {
             "identifier": {
-                "system": NATIONAL_ID_SYSTEM,
-                "value": national_id,
+                "system": identifier_system,
+                "value": identifier_value,
             }
         }
 

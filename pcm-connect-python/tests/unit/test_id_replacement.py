@@ -45,6 +45,43 @@ async def test_resolve_success() -> None:
 
 
 @respx.mock
+async def test_resolve_preserves_identifier_system_from_pcm_patient_claim() -> None:
+    route = respx.post("http://id/api/v1/resolve").mock(
+        return_value=httpx.Response(
+            200,
+            json={"patient_id": "000000001", "resource_reference": "Patient/000000001"},
+        )
+    )
+
+    result = await _client().resolve_patient_id(
+        "http://fhir.health.gov.il/identifier/il-hdp-test-id|1"
+    )
+
+    assert result == "000000001"
+    assert json.loads(route.calls[0].request.content) == {
+        "identifier": {
+            "system": "http://fhir.health.gov.il/identifier/il-hdp-test-id",
+            "value": "1",
+        }
+    }
+
+
+@respx.mock
+async def test_resolve_splits_only_the_first_identifier_separator() -> None:
+    route = respx.post("http://id/api/v1/resolve").mock(
+        return_value=httpx.Response(200, json={"patient_id": "P-42"})
+    )
+
+    result = await _client().resolve_patient_id("https://example.test/id|part|two")
+
+    assert result == "P-42"
+    assert json.loads(route.calls[0].request.content)["identifier"] == {
+        "system": "https://example.test/id",
+        "value": "part|two",
+    }
+
+
+@respx.mock
 async def test_resolve_404_returns_id_002() -> None:
     respx.post("http://id/api/v1/resolve").mock(return_value=httpx.Response(404, json={"error": "patient_not_found"}))
 
