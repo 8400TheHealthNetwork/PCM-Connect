@@ -70,6 +70,43 @@ def test_resolve_returns_200_when_patient_found(monkeypatch, tmp_path: Path) -> 
     }
 
 
+def test_resolve_preserves_custom_identifier_system(monkeypatch, tmp_path: Path) -> None:
+    config_path = tmp_path / "test_config.json"
+    _write_test_config(config_path)
+    monkeypatch.setenv("FHIR_RESOLVE_CONFIG", str(config_path))
+    get_settings.cache_clear()
+
+    async def fake_resolve_patient(system: str, value: str, settings):
+        assert system == "http://fhir.health.gov.il/identifier/il-hdp-test-id"
+        assert value == "1"
+        return ResolveResult(
+            patient_id="000000001",
+            resource_reference="Patient/000000001",
+        )
+
+    from api import routes
+
+    monkeypatch.setattr(routes, "resolve_patient", fake_resolve_patient)
+
+    with TestClient(app) as client:
+        response = client.post(
+            "/api/v1/resolve",
+            auth=_auth(),
+            json={
+                "identifier": {
+                    "system": "http://fhir.health.gov.il/identifier/il-hdp-test-id",
+                    "value": "1",
+                }
+            },
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "patient_id": "000000001",
+        "resource_reference": "Patient/000000001",
+    }
+
+
 def test_resolve_returns_404_when_patient_missing(monkeypatch, tmp_path: Path) -> None:
     config_path = tmp_path / "test_config.json"
     _write_test_config(config_path)
